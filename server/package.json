@@ -1,6 +1,6 @@
 {
   "name": "hyperframes-startos-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Agent API and MCP server for HyperFrames on StartOS",
   "type": "module",

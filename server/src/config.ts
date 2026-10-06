@@ -36,7 +36,7 @@ export const config = {
     .split(':')
     .filter(Boolean)
     .map((d) => resolve(d)),
-  version: process.env.HF_SERVER_VERSION ?? '0.1.0',
+  version: process.env.HF_SERVER_VERSION ?? '0.1.1',
   hyperframesVersion: process.env.HYPERFRAMES_VERSION ?? 'unknown',
 } as const
 

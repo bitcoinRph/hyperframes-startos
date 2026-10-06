@@ -30,6 +30,12 @@ Work the list top to bottom. A gate that cannot be checked is reported, not skip
       ones about duration sources, missing ids and nested structure.
 - [ ] **Check clean.** `check` returns `ok: true` with `browserSkipped: false`. Layout findings
       that are deliberate carry the `data-layout-allow-*` marker, with a reason in a comment.
+      A fresh `create_project` scaffold fails this gate on purpose: it is 10 s long with an
+      empty timeline, and `check` reports `sweep_static` for any composition of 3 s or more
+      whose sampled frames do not change. Animate the composition before running `check`, or,
+      for a deliberately still card, put `data-no-timeline` on the root element. Never work
+      around `sweep_static` any other way; it is the gate that catches a video whose motion
+      silently failed to run.
 - [ ] **Frames reviewed.** `snapshot` at each scene midpoint and at the last 0.2 s. Look for
       clipped text, type too small for the medium (body copy under about 36 px at 1080p is
       a flag), empty web-page layouts, overlap, unreadable contrast.

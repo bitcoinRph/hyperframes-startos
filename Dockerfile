@@ -80,7 +80,7 @@ COPY assets/hf-studio assets/hf-server /usr/local/bin/
 RUN chmod +x /usr/local/bin/hf-studio /usr/local/bin/hf-server
 
 ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills
-ENV HF_SERVER_VERSION=0.1.0
+ENV HF_SERVER_VERSION=0.1.1
 ENV HOME=/data/home
 ENV HYPERFRAMES_PROJECTS_DIR=/data/projects
 ENV HF_STATE_DIR=/data/startos
