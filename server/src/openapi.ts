@@ -140,7 +140,7 @@ export function openapi(serverUrls: string[]) {
       '/api/v1/projects/{project}/fetch': {
         parameters: [projectParam],
         post: {
-          summary: 'Download a URL into the project',
+          summary: 'Download a public http(s) URL into the project (private, loopback and link-local targets are refused, redirects included; 512 MiB limit)',
           requestBody: { required: true, content: json({ type: 'object', required: ['url', 'path'], properties: { url: { type: 'string' }, path: { type: 'string' } } }) },
           responses: ok({ $ref: '#/components/schemas/FileEntry' }),
         },

@@ -176,4 +176,28 @@ export function assertAllowedCli(args: string[]): void {
   }
   if (args.some((a) => a === '--docker')) throw new Error('--docker is not available inside the service')
   if (args.some((a) => a === '--file-issue')) throw new Error('--file-issue publishes the project; refused')
+  const flagRule = flagRules[command]
+  if (flagRule) {
+    const flags = args.slice(1)
+    const bad = flags.find((a) => !flagRule.allowed.has(a))
+    if (bad !== undefined) throw new Error(`${command} ${bad}: ${flagRule.reason}`)
+    if (!flags.some((a) => flagRule.requireOne.has(a))) throw new Error(`${command}: ${flagRule.reason}`)
+  }
+}
+
+/**
+ * Commands whose safety depends on their flags. Every argument after the
+ * command must be in `allowed`, and one of `requireOne` must be present.
+ * Values are refused too, so a flag cannot be pointed at a path outside the
+ * project.
+ */
+const flagRules: Record<string, { allowed: Set<string>; requireOne: Set<string>; reason: string }> = {
+  // Bare `upgrade` prompts, and `upgrade --yes` runs the installer and replaces
+  // the CLI pinned in this image. `--check` only reports, and `--project`
+  // rewrites the current project's own package.json pins.
+  upgrade: {
+    allowed: new Set(['--check', '--project', '--json']),
+    requireOne: new Set(['--check', '--project']),
+    reason: 'only `upgrade --check` and `upgrade --project` (plus `--json`) are available; the CLI version is pinned by the image',
+  },
 }

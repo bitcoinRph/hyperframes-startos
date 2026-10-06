@@ -52,6 +52,18 @@ test('run_cli allowlist blocks hosted and interactive commands', () => {
   assert.throws(() => assertAllowedCli(['render', '--docker']), /--docker/)
 })
 
+test('run_cli upgrade cannot replace the pinned CLI', () => {
+  assertAllowedCli(['upgrade', '--check'])
+  assertAllowedCli(['upgrade', '--check', '--json'])
+  assertAllowedCli(['upgrade', '--project'])
+  assertAllowedCli(['upgrade', '--project', '--json'])
+  assert.throws(() => assertAllowedCli(['upgrade']), /upgrade --check/)
+  assert.throws(() => assertAllowedCli(['upgrade', '--yes']), /--yes/)
+  assert.throws(() => assertAllowedCli(['upgrade', '-y']), /-y/)
+  assert.throws(() => assertAllowedCli(['upgrade', '--check', '--yes']), /--yes/)
+  assert.throws(() => assertAllowedCli(['upgrade', '--project', '/data']), /\/data/)
+})
+
 test('parseJsonOutput finds the trailing JSON document', () => {
   assert.deepEqual(parseJsonOutput('progress 1\nprogress 2\n{"ok":true}\n'), { ok: true })
   assert.equal(parseJsonOutput('no json here'), null)
