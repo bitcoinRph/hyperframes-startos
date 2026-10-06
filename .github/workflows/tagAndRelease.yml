@@ -2,13 +2,15 @@ name: Tag and Release
 
 # Every push to main (normally a merged PR) becomes a GitHub release: the
 # version in startos/versions/current.ts is tagged `v<upstream>_<downstream>`
-# and Start9's reusable release workflow builds the .s9pk for every
-# architecture and attaches them to the release with their SHA256 sums.
+# and the .s9pk for each architecture is built and attached to a GitHub
+# release of the same name, with SHA256 sums and the release notes.
 #
-# Start9's own tagAndRelease.yml is not used because it requires a
-# REFERENCE_REGISTRY to query; this package publishes to GitHub only.
-# A version that already has a tag is left alone, so a docs-only or
-# wrapper-only commit without a version bump releases nothing.
+# Start9's reusable release workflow is not used: it needs a registry to query
+# before tagging, and it hands the .s9pk files between jobs as Actions
+# artifacts, which fails once the account's artifact storage quota is full
+# (these packages are about 650 MB each). Here every build job uploads its
+# own package straight to the release; the release is created or updated in
+# place, so the jobs do not race.
 #
 # Needs the DEV_KEY repository secret: the developer signing key PEM
 # (`start-cli init-key` writes it to ~/.startos/id.key.pem). StartOS checks
@@ -31,6 +33,7 @@ jobs:
       contents: write
     outputs:
       tag: ${{ steps.extract.outputs.tag }}
+      version: ${{ steps.extract.outputs.version }}
       skip: ${{ steps.check.outputs.skip }}
     steps:
       - name: Checkout repository
@@ -71,13 +74,65 @@ jobs:
           git push origin "refs/tags/${TAG}"
         shell: bash
 
+      # Created here, once, so the two build jobs below only attach assets and
+      # never race to create the same release.
+      - name: Create the GitHub release
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.extract.outputs.tag }}
+          name: ${{ steps.extract.outputs.version }}
+          generate_release_notes: true
+          body: |
+            HyperFrames ${{ steps.extract.outputs.version }} for StartOS. Sideload the `.s9pk` for your server's architecture (`x86_64` or `aarch64`). SHA256 sums are in the `SHA256SUMS-*.txt` files. Release notes as shown in StartOS are in `startos/versions/current.ts`.
+
   release:
     needs: tag
     if: needs.tag.outputs.skip == 'false'
-    uses: Start9Labs/start-technologies/.github/workflows/release.yml@master
-    with:
-      TAG: ${{ needs.tag.outputs.tag }}
-    secrets:
-      DEV_KEY: ${{ secrets.DEV_KEY }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86, runner: ubuntu-latest }
+          - { target: arm, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
+    steps:
+      - name: Setup build environment
+        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+
+      - name: Checkout repository at the release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          submodules: recursive
+
+      - name: Provision the signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          mkdir -p ~/.startos .startos
+          printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+        shell: bash
+
+      - name: Install package dependencies
+        run: npm ci
+        shell: bash
+
+      - name: Build (make ${{ matrix.target }})
+        run: |
+          make ${{ matrix.target }}
+          echo ""
+          echo "SHA256SUMs:"
+          sha256sum *.s9pk | tee "SHA256SUMS-${{ matrix.target }}.txt"
+        shell: bash
+
+      - name: Attach the package to the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.tag.outputs.tag }}
+          files: |
+            ./*.s9pk
+            ./SHA256SUMS-${{ matrix.target }}.txt

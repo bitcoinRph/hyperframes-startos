@@ -181,11 +181,11 @@ Local end-to-end test of the server without StartOS: install `hyperframes` in a 
 
 ## Releases
 
-Every push to `main` runs `.github/workflows/tagAndRelease.yml`. It reads the version from `startos/versions/current.ts`, and when no `v<upstream>_<downstream>` tag exists yet it pushes the tag and calls Start9's reusable release workflow, which builds the `.s9pk` for x86_64 and aarch64 and attaches them, with SHA256 sums and the release notes, to a GitHub release of the same name. A merge that does not change the version releases nothing.
+Every push to `main` runs `.github/workflows/tagAndRelease.yml`. It reads the version from `startos/versions/current.ts`; when no `v<upstream>_<downstream>` tag exists yet it pushes the tag, creates the GitHub release, and one job per architecture (x86_64 on `ubuntu-latest`, aarch64 on `ubuntu-24.04-arm`) builds the `.s9pk` and attaches it with a `SHA256SUMS-*.txt` file. A merge that does not change the version releases nothing. Pushing a `v*` tag by hand runs `.github/workflows/release.yml` for the same result.
 
-The build signs packages with the **`DEV_KEY` repository secret**: the developer key PEM written by `start-cli init-key` to `~/.startos/id.key.pem`. The workflow stops with a clear error when the secret is missing. StartOS expects updates to be signed by the same key, so create the key once and keep it.
+Packages are about 650 MB each, so the release jobs upload straight from the build runner and never use Actions artifacts; Start9's reusable release workflow does, and a full artifact storage quota breaks it. The PR workflow `.github/workflows/build.yml` (skipped while the PR is a draft) builds both architectures and uploads artifacts only best effort.
 
-Pushing a `v*` tag by hand runs `.github/workflows/release.yml` for the same result. Pull requests run `.github/workflows/build.yml` (skipped while the PR is a draft), which only uploads the `.s9pk` as workflow artifacts.
+The release builds sign packages with the **`DEV_KEY` repository secret**: the developer key PEM written by `start-cli init-key` to `~/.startos/id.key.pem`. The workflow stops with a clear error when the secret is missing. StartOS expects updates to be signed by the same key, so create the key once and keep it.
 
 ## Quick Reference for AI Consumers
 

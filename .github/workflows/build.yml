@@ -1,5 +1,10 @@
 name: Build
 
+# Pull-request build: proves the Docker image and the .s9pk build for both
+# architectures. The packages are about 650 MB each, so the artifact upload
+# is best effort: a full Actions artifact storage quota must not turn a
+# good build red. Releases never depend on artifacts (see tagAndRelease.yml).
+
 on:
   workflow_dispatch:
   pull_request:
@@ -12,6 +17,51 @@ concurrency:
 
 jobs:
   build:
-    if: github.event.pull_request.draft == false
-    uses: Start9Labs/start-technologies/.github/workflows/build.yml@master
-    # No DEV_KEY — a PR build doesn't publish, so it doesn't need the signing key.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86, runner: ubuntu-latest }
+          - { target: arm, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Setup build environment
+        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # A PR build does not publish, so a throwaway key is fine.
+      - name: Provision a workspace signing key
+        run: |
+          start-cli init-key
+          mkdir -p .startos
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+        shell: bash
+
+      - name: Install package dependencies
+        run: npm ci
+        shell: bash
+
+      - name: Build (make ${{ matrix.target }})
+        run: |
+          make ${{ matrix.target }}
+          echo ""
+          echo "SHA256SUMs:"
+          sha256sum *.s9pk
+        shell: bash
+
+      - name: Upload the s9pk as an artifact (best effort)
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: hyperframes_${{ matrix.target }}
+          path: ./*.s9pk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
