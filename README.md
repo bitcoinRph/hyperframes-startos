@@ -179,6 +179,14 @@ make x86                                           # .s9pk, inside a packaging w
 
 Local end-to-end test of the server without StartOS: install `hyperframes` in a scratch directory, then run `server/dist/main.js` with `HF_CLI=<path to hyperframes>`, `HYPERFRAMES_PROJECTS_DIR`, `HF_STATE_DIR`, `HF_API_KEY`, `HF_SKILLS_DIRS` and `PUPPETEER_EXECUTABLE_PATH=<a Chromium>`. The sequence create project → write `index.html` → lint → check → snapshot → render → download reproduces what an agent does.
 
+## Releases
+
+Every push to `main` runs `.github/workflows/tagAndRelease.yml`. It reads the version from `startos/versions/current.ts`, and when no `v<upstream>_<downstream>` tag exists yet it pushes the tag and calls Start9's reusable release workflow, which builds the `.s9pk` for x86_64 and aarch64 and attaches them, with SHA256 sums and the release notes, to a GitHub release of the same name. A merge that does not change the version releases nothing.
+
+The build signs packages with the **`DEV_KEY` repository secret**: the developer key PEM written by `start-cli init-key` to `~/.startos/id.key.pem`. The workflow stops with a clear error when the secret is missing. StartOS expects updates to be signed by the same key, so create the key once and keep it.
+
+Pushing a `v*` tag by hand runs `.github/workflows/release.yml` for the same result. Pull requests run `.github/workflows/build.yml` (skipped while the PR is a draft), which only uploads the `.s9pk` as workflow artifacts.
+
 ## Quick Reference for AI Consumers
 
 ```yaml

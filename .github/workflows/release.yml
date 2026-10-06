@@ -1,5 +1,11 @@
 name: Release
 
+# Manual path: pushing a `v<upstream>_<downstream>` tag by hand builds the
+# .s9pk files and creates (or updates) the GitHub release for that tag.
+# Tags pushed by the Tag and Release workflow do not trigger this (GitHub
+# does not chain workflows started with GITHUB_TOKEN); that workflow calls
+# the release workflow directly instead.
+
 on:
   push:
     tags:
@@ -9,11 +15,8 @@ jobs:
   release:
     uses: Start9Labs/start-technologies/.github/workflows/release.yml@master
     with:
-      RELEASE_REGISTRY: ${{ vars.RELEASE_REGISTRY }}
-      S3_S9PKS_BASE_URL: ${{ vars.S3_S9PKS_BASE_URL }}
+      TAG: ${{ github.ref_name }}
     secrets:
       DEV_KEY: ${{ secrets.DEV_KEY }}
-      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
-      S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
     permissions:
       contents: write

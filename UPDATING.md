@@ -31,6 +31,7 @@ Releases are tagged `v<version>` and documented in `hyperframes/releases/v<versi
 5. Compare `hyperframes/skills/` against `skills/README.md` (skill added, renamed or removed) and against the command map in `skills/hyperframes-server/SKILL.md`. Compare `hyperframes --help` output against `allowedCliCommands` in `server/src/util/cli.ts` and the `render` flags against `server/src/jobs.ts`.
 6. Run `npm run check`, then in `server/`: `npm ci && npm run check && npm test`.
 7. Build and install on a StartOS box; create a project, lint, check, snapshot and render through the API; open Studio.
+8. Merge to `main`. The Tag and Release workflow tags `v<version>` and publishes the `.s9pk` files as a GitHub release (see `README.md`, Releases). It needs the `DEV_KEY` secret.
 
 ## Wrapper-only changes
 

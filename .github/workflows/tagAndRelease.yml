@@ -1,24 +1,83 @@
 name: Tag and Release
 
+# Every push to main (normally a merged PR) becomes a GitHub release: the
+# version in startos/versions/current.ts is tagged `v<upstream>_<downstream>`
+# and Start9's reusable release workflow builds the .s9pk for every
+# architecture and attaches them to the release with their SHA256 sums.
+#
+# Start9's own tagAndRelease.yml is not used because it requires a
+# REFERENCE_REGISTRY to query; this package publishes to GitHub only.
+# A version that already has a tag is left alone, so a docs-only or
+# wrapper-only commit without a version bump releases nothing.
+#
+# Needs the DEV_KEY repository secret: the developer signing key PEM
+# (`start-cli init-key` writes it to ~/.startos/id.key.pem). StartOS checks
+# that updates are signed by the same key, so keep it stable.
+
 on:
   push:
     branches: ['main']
     paths-ignore: ['*.md']
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   tag:
-    uses: Start9Labs/start-technologies/.github/workflows/tagAndRelease.yml@master
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.extract.outputs.tag }}
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Require the developer signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          if [ -z "$DEV_KEY" ]; then
+            echo "::error::The DEV_KEY repository secret is not set. Create a developer key with 'start-cli init-key' and store the PEM from ~/.startos/id.key.pem as the DEV_KEY secret, then re-run this workflow."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Extract package ID and version
+        id: extract
+        uses: Start9Labs/start-technologies/.github/actions/extract-version@master
+
+      - name: Check whether this version is already released
+        id: check
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists; nothing to release. Bump startos/versions/current.ts to release again."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} is new; releasing."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Push release tag
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          git tag "${TAG}"
+          git push origin "refs/tags/${TAG}"
+        shell: bash
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
+    uses: Start9Labs/start-technologies/.github/workflows/release.yml@master
     with:
-      REFERENCE_REGISTRY: ${{ vars.REFERENCE_REGISTRY }}
-      RELEASE_REGISTRY: ${{ vars.RELEASE_REGISTRY }}
-      S3_S9PKS_BASE_URL: ${{ vars.S3_S9PKS_BASE_URL }}
+      TAG: ${{ needs.tag.outputs.tag }}
     secrets:
       DEV_KEY: ${{ secrets.DEV_KEY }}
-      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
-      S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
     permissions:
       contents: write
