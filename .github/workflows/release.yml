@@ -55,16 +55,20 @@ jobs:
         with:
           submodules: recursive
 
+      # A DEV_KEY secret gives every release the same signing identity. Without
+      # one, a fresh key is generated here so the release still goes out.
       - name: Provision the signing key
         env:
           DEV_KEY: ${{ secrets.DEV_KEY }}
         run: |
-          if [ -z "$DEV_KEY" ]; then
-            echo "::error::The DEV_KEY repository secret is not set; see README.md, Releases."
-            exit 1
-          fi
           mkdir -p ~/.startos .startos
-          printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+          if [ -n "$DEV_KEY" ]; then
+            printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+            echo "Signing with the DEV_KEY secret."
+          else
+            start-cli init-key
+            echo "::warning::No DEV_KEY secret: this release is signed with a key generated for this run."
+          fi
           cp ~/.startos/id.key.pem .startos/build.key.pem
         shell: bash
 

@@ -185,7 +185,7 @@ Every push to `main` runs `.github/workflows/tagAndRelease.yml`. It reads the ve
 
 Packages are about 650 MB each, so the release jobs upload straight from the build runner and never use Actions artifacts; Start9's reusable release workflow does, and a full artifact storage quota breaks it. The PR workflow `.github/workflows/build.yml` (skipped while the PR is a draft) builds both architectures and uploads artifacts only best effort.
 
-The release builds sign packages with the **`DEV_KEY` repository secret**: the developer key PEM written by `start-cli init-key` to `~/.startos/id.key.pem`. The workflow stops with a clear error when the secret is missing. StartOS expects updates to be signed by the same key, so create the key once and keep it.
+Signing needs no setup. When a **`DEV_KEY`** repository secret exists (the developer key PEM that `start-cli init-key` writes to `~/.startos/id.key.pem`), every release is signed with it and carries one stable identity. Without the secret, each release job generates a key for that run and prints a warning. Add the secret if you want all releases signed by the same key.
 
 ## Quick Reference for AI Consumers
 
