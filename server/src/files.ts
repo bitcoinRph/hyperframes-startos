@@ -1,8 +1,9 @@
 import { createReadStream } from 'node:fs'
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative } from 'node:path'
 import { requireProject } from './projects.js'
 import { badRequest, notFound } from './util/errors.js'
+import { downloadToFile } from './util/net.js'
 import { resolveInside } from './util/paths.js'
 
 export type FileEntry = {
@@ -149,7 +150,12 @@ export async function deleteProjectPath(project: string, path: string): Promise<
 
 const MAX_FETCH = 512 * 1024 * 1024
 
-/** Download an http(s) URL into the project, for agents that cannot upload bytes themselves. */
+/**
+ * Download an http(s) URL into the project, for agents that cannot upload
+ * bytes themselves. Only public hosts are reachable (see util/net.ts); the body
+ * streams to a temporary file beside the destination and is renamed into place
+ * once it is complete and under the size limit.
+ */
 export async function fetchIntoProject(project: string, url: string, path: string): Promise<FileEntry> {
   let parsed: URL
   try {
@@ -158,11 +164,17 @@ export async function fetchIntoProject(project: string, url: string, path: strin
     throw badRequest('url is not valid')
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw badRequest('url must be http or https')
-  const res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60_000) })
-  if (!res.ok) throw badRequest(`fetch failed with HTTP ${res.status}`)
-  const length = Number(res.headers.get('content-length') ?? '0')
-  if (length > MAX_FETCH) throw badRequest(`remote file exceeds ${MAX_FETCH} bytes`)
-  const buffer = Buffer.from(await res.arrayBuffer())
-  if (buffer.length > MAX_FETCH) throw badRequest(`remote file exceeds ${MAX_FETCH} bytes`)
-  return writeProjectFile(project, path, buffer)
+  const root = await requireProject(project)
+  const abs = await resolveInside(root, path)
+  await mkdir(dirname(abs), { recursive: true })
+  const partial = `${abs}.${process.pid}-${Date.now()}.part`
+  try {
+    await downloadToFile(parsed, partial, { maxBytes: MAX_FETCH, maxRedirects: 5, timeoutMs: 10 * 60_000 })
+    await rename(partial, abs)
+  } catch (err) {
+    await rm(partial, { force: true })
+    throw err
+  }
+  const s = await stat(abs)
+  return { path, type: 'file', size: s.size, modifiedAt: s.mtime.toISOString() }
 }

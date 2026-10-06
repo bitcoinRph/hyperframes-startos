@@ -12,7 +12,47 @@ on:
       - 'v*.*'
 
 jobs:
+  # Fast gates, before any image is built: a release never ships code that
+  # fails typecheck, lint, formatting or the server's unit tests. The root
+  # npm audit is informational: its findings sit in the SDK's build-time lint
+  # tooling, which is not part of the image (see README.md, Development).
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: StartOS package (typecheck, SDK lint, prettier)
+        run: |
+          npm ci
+          npm run check
+          node node_modules/@start9labs/start-sdk/lint.mjs
+          npx prettier --check startos
+        shell: bash
+
+      - name: Agent API and MCP server (typecheck, tests, audit)
+        working-directory: server
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm audit --audit-level=high
+        shell: bash
+
+      - name: Root npm audit (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+        shell: bash
+
   create:
+    needs: checks
     runs-on: ubuntu-latest
     permissions:
       contents: write

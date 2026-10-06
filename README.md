@@ -136,7 +136,9 @@ Source: `server/`. Hono on `@hono/node-server`, Node 22. OpenAPI 3.1 at `GET /op
 
 Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist under `/data/startos/jobs/`; jobs active during a restart are marked `interrupted`. Output lands in the project's `renders/`; `png-sequence` and `hls` produce directories.
 
-`run_cli` / `POST /api/v1/cli` allow: `add beats capture catalog check clean compare compositions docs doctor figma grade-compare history info keyframes lint media-treatment media-use models normalize-audio remove-background render snapshot timeline transcribe tts upgrade`. Refused: `publish cloud lambda cloudrun auth feedback telemetry events preview play present open browser init skills`, `--docker`, `--file-issue`.
+`run_cli` / `POST /api/v1/cli` allow: `add beats capture catalog check clean compare compositions docs doctor figma grade-compare history info keyframes lint media-treatment media-use models normalize-audio remove-background render snapshot timeline transcribe tts upgrade`. Refused: `publish cloud lambda cloudrun auth feedback telemetry events preview play present open browser init skills`, `--docker`, `--file-issue`. `upgrade` is limited to `--check` and `--project` (plus `--json`): bare `upgrade` prompts, and `upgrade --yes` would replace the CLI the image pins.
+
+`fetch_asset` / `POST /api/v1/projects/:p/fetch` downloads only from public hosts. The server resolves the name, refuses loopback, RFC 1918, link-local (including `169.254.169.254`), multicast, unique-local and `.local`/`.internal`/`.lan`/`.home.arpa` targets, connects to the address it vetted, applies the same rule to every redirect (5 at most), and streams the body to a `.part` file next to the destination with a 512 MiB limit on the bytes that actually arrive (`server/src/util/net.ts`).
 
 ## MCP Server
 
@@ -174,8 +176,13 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 npm install && npm run check                       # StartOS SDK code
 node node_modules/@start9labs/start-sdk/lint.mjs && npx prettier --check startos
 cd server && npm ci && npm run check && npm test   # agent API and MCP server
+cd server && npm audit --audit-level=high          # runtime dependency audit (must be clean)
 make x86                                           # .s9pk, inside a packaging workspace with Docker
 ```
+
+The `checks` job in every workflow runs the first four lines before any image is built, so a pull request, a push to `main` and a hand-pushed tag all stop at a type error, a lint or formatting finding, a failing server test or a high-severity finding in the server's dependencies.
+
+**Root `npm audit` exception.** `npm audit --audit-level=high` at the repository root reports findings in `brace-expansion` and `js-yaml`. Both are pulled in only by the eslint tooling under `node_modules/@start9labs/start-sdk/node_modules/`, which runs the SDK lint step at build time. The bundle the package ships (`javascript/index.js`) contains neither, and nothing from the root `node_modules` enters the Docker image. The root audit therefore runs in CI as an informational step (`continue-on-error`), and the server audit is the blocking runtime gate. The exception ends with the move to `@start9labs/start-sdk` 3.x, which carries clean tooling; that upgrade changes the dependencies and manifest API and is its own, box-tested change.
 
 Local end-to-end test of the server without StartOS: install `hyperframes` in a scratch directory, then run `server/dist/main.js` with `HF_CLI=<path to hyperframes>`, `HYPERFRAMES_PROJECTS_DIR`, `HF_STATE_DIR`, `HF_API_KEY`, `HF_SKILLS_DIRS` and `PUPPETEER_EXECUTABLE_PATH=<a Chromium>`. The sequence create project → write `index.html` → lint → check → snapshot → render → download reproduces what an agent does.
 

@@ -208,7 +208,7 @@ export function createMcpServer(): McpServer {
     'fetch_asset',
     {
       title: 'Fetch asset from URL',
-      description: 'Download an http(s) URL (image, video, audio, font, Lottie) into the project so a composition can reference it locally.',
+      description: 'Download an http(s) URL (image, video, audio, font, Lottie) into the project so a composition can reference it locally. Public hosts only: loopback, LAN, link-local and .local/.internal targets are refused, redirects included; 512 MiB limit.',
       inputSchema: { project, url: z.string().url(), path: z.string().describe('Destination, e.g. assets/music.mp3') },
     },
     async ({ project: name, url, path }) => guard(async () => text(await fetchIntoProject(name, url, path))),
