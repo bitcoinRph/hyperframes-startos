@@ -1,0 +1,42 @@
+#!/bin/sh
+# Studio daemon entrypoint for the StartOS package.
+#
+# Serves one HyperFrames project with `hyperframes preview`. The project comes
+# from $STUDIO_PROJECT (written by the Open Project in Studio action or by
+# the agent API). When that project is missing it falls back to the first
+# project that has an index.html, and when there are none it scaffolds a
+# `welcome` project so Studio always has something to show.
+set -eu
+
+PROJECTS_DIR="${HYPERFRAMES_PROJECTS_DIR:-/data/projects}"
+PORT="${STUDIO_PORT:-3002}"
+HOME="${HOME:-/data/home}"
+export HOME
+mkdir -p "$PROJECTS_DIR" "$HOME"
+
+pick_project() {
+  if [ -n "${STUDIO_PROJECT:-}" ] && [ -f "$PROJECTS_DIR/$STUDIO_PROJECT/index.html" ]; then
+    echo "$STUDIO_PROJECT"
+    return
+  fi
+  for dir in "$PROJECTS_DIR"/*/; do
+    [ -f "${dir}index.html" ] || continue
+    basename "$dir"
+    return
+  done
+  echo ""
+}
+
+PROJECT="$(pick_project)"
+if [ -z "$PROJECT" ]; then
+  echo "hf-studio: no project found, scaffolding $PROJECTS_DIR/welcome" >&2
+  HYPERFRAMES_SKIP_SKILLS=1 hyperframes init "$PROJECTS_DIR/welcome" --non-interactive
+  PROJECT="welcome"
+fi
+
+echo "hf-studio: serving $PROJECTS_DIR/$PROJECT on port $PORT" >&2
+cd "$PROJECTS_DIR/$PROJECT"
+# --foreground keeps the server attached in this non-interactive shell;
+# HYPERFRAMES_PREVIEW_HOST (set by main.ts) makes it listen beyond loopback
+# so the StartOS proxy can reach it.
+exec hyperframes preview . --port "$PORT" --no-open --foreground

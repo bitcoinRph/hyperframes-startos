@@ -1,0 +1,7 @@
+#!/bin/sh
+# Agent API and MCP server entrypoint for the StartOS package.
+set -eu
+HOME="${HOME:-/data/home}"
+export HOME
+mkdir -p "${HYPERFRAMES_PROJECTS_DIR:-/data/projects}" "$HOME" "${HF_STATE_DIR:-/data/startos}"
+exec node /opt/hyperframes-startos/server/dist/main.js
