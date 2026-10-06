@@ -1,0 +1,10 @@
+# Keep the image build context small: only the server source, the entrypoint
+# scripts and the skills trees are copied into the image.
+*
+!server/**
+server/node_modules/**
+server/dist/**
+!assets/**
+!skills/**
+!hyperframes/skills/**
+!hyperframes/LICENSE

@@ -1,0 +1,138 @@
+name: Tag and Release
+
+# Every push to main (normally a merged PR) becomes a GitHub release: the
+# version in startos/versions/current.ts is tagged `v<upstream>_<downstream>`
+# and the .s9pk for each architecture is built and attached to a GitHub
+# release of the same name, with SHA256 sums and the release notes.
+#
+# Start9's reusable release workflow is not used: it needs a registry to query
+# before tagging, and it hands the .s9pk files between jobs as Actions
+# artifacts, which fails once the account's artifact storage quota is full
+# (these packages are about 650 MB each). Here every build job uploads its
+# own package straight to the release; the release is created or updated in
+# place, so the jobs do not race.
+#
+# Needs the DEV_KEY repository secret: the developer signing key PEM
+# (`start-cli init-key` writes it to ~/.startos/id.key.pem). StartOS checks
+# that updates are signed by the same key, so keep it stable.
+
+on:
+  push:
+    branches: ['main']
+    paths-ignore: ['*.md']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.extract.outputs.tag }}
+      version: ${{ steps.extract.outputs.version }}
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Require the developer signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          if [ -z "$DEV_KEY" ]; then
+            echo "::error::The DEV_KEY repository secret is not set. Create a developer key with 'start-cli init-key' and store the PEM from ~/.startos/id.key.pem as the DEV_KEY secret, then re-run this workflow."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Extract package ID and version
+        id: extract
+        uses: Start9Labs/start-technologies/.github/actions/extract-version@master
+
+      - name: Check whether this version is already released
+        id: check
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists; nothing to release. Bump startos/versions/current.ts to release again."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} is new; releasing."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Push release tag
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          git tag "${TAG}"
+          git push origin "refs/tags/${TAG}"
+        shell: bash
+
+      # Created here, once, so the two build jobs below only attach assets and
+      # never race to create the same release.
+      - name: Create the GitHub release
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.extract.outputs.tag }}
+          name: ${{ steps.extract.outputs.version }}
+          generate_release_notes: true
+          body: |
+            HyperFrames ${{ steps.extract.outputs.version }} for StartOS. Sideload the `.s9pk` for your server's architecture (`x86_64` or `aarch64`). SHA256 sums are in the `SHA256SUMS-*.txt` files. Release notes as shown in StartOS are in `startos/versions/current.ts`.
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86, runner: ubuntu-latest }
+          - { target: arm, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - name: Setup build environment
+        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+
+      - name: Checkout repository at the release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          submodules: recursive
+
+      - name: Provision the signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          mkdir -p ~/.startos .startos
+          printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+        shell: bash
+
+      - name: Install package dependencies
+        run: npm ci
+        shell: bash
+
+      - name: Build (make ${{ matrix.target }})
+        run: |
+          make ${{ matrix.target }}
+          echo ""
+          echo "SHA256SUMs:"
+          sha256sum *.s9pk | tee "SHA256SUMS-${{ matrix.target }}.txt"
+        shell: bash
+
+      - name: Attach the package to the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.tag.outputs.tag }}
+          files: |
+            ./*.s9pk
+            ./SHA256SUMS-${{ matrix.target }}.txt

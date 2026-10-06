@@ -1,0 +1,89 @@
+name: Release
+
+# Manual path: pushing a `v<upstream>_<downstream>` tag by hand builds the
+# .s9pk files and creates or updates the GitHub release for that tag, with
+# the same per-architecture jobs as Tag and Release. Tags pushed by that
+# workflow do not trigger this one (GitHub does not chain workflows started
+# with GITHUB_TOKEN); it attaches the packages itself.
+
+on:
+  push:
+    tags:
+      - 'v*.*'
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Extract package ID and version
+        id: extract
+        uses: Start9Labs/start-technologies/.github/actions/extract-version@master
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.extract.outputs.version }}
+          generate_release_notes: true
+          body: |
+            HyperFrames ${{ steps.extract.outputs.version }} for StartOS. Sideload the `.s9pk` for your server's architecture (`x86_64` or `aarch64`). SHA256 sums are in the `SHA256SUMS-*.txt` files. Release notes as shown in StartOS are in `startos/versions/current.ts`.
+
+  release:
+    needs: create
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86, runner: ubuntu-latest }
+          - { target: arm, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - name: Setup build environment
+        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Provision the signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          if [ -z "$DEV_KEY" ]; then
+            echo "::error::The DEV_KEY repository secret is not set; see README.md, Releases."
+            exit 1
+          fi
+          mkdir -p ~/.startos .startos
+          printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+        shell: bash
+
+      - name: Install package dependencies
+        run: npm ci
+        shell: bash
+
+      - name: Build (make ${{ matrix.target }})
+        run: |
+          make ${{ matrix.target }}
+          echo ""
+          echo "SHA256SUMs:"
+          sha256sum *.s9pk | tee "SHA256SUMS-${{ matrix.target }}.txt"
+        shell: bash
+
+      - name: Attach the package to the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ./*.s9pk
+            ./SHA256SUMS-${{ matrix.target }}.txt
