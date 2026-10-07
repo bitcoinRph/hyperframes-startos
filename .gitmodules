@@ -6,3 +6,4 @@
 [submodule "community-skills"]
 	path = community-skills
 	url = https://github.com/heygen-com/hyperframes-community-skills.git
+	shallow = true
