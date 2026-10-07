@@ -32,6 +32,10 @@ Your agent can also start from HeyGen's own launch videos. Ask for "a product st
 
 Studio shows one project at a time. **Open Project in Studio** changes which one; only Studio restarts, and renders keep going.
 
+### Studio on a phone
+
+Studio was built for a desktop screen. On a phone held upright, this package shows the preview and the timeline full width and adds a bar at the bottom: **Preview** and **Timeline** make that panel fill the screen or put it back, and **Panels** opens Studio's Window menu to show the compositions, catalog, design or render panels and to reset the layout. Turn the phone sideways, or use a tablet, for the full desktop layout.
+
 ## Actions
 
 - **Set Studio Password** — makes a new Studio password and shows it once. Running it again replaces the old one.

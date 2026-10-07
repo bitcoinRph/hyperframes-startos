@@ -1,18 +1,18 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '0.8.135:2',
+  version: '0.8.135:3',
   releaseNotes: {
     en_US:
-      'Catalog and launch references for agents: catalog_item reads a registry item’s variables before install, catalog_add bakes variable values into the snippet (vars), import_project copies a HeyGen launch film or re-brandable template from GitHub (LFS media included) into a project, and a new hyperframes-launch-references skill explains how to study and re-brand them.',
+      'Studio works on a phone: under 600 px the preview and timeline take the full width, the header wraps so Export is reachable, and a bottom bar switches between Preview, Timeline and the panel menu. Six HyperFrames community skills (vox-explainer, camera-3d-captions, duo, p5-paint-animation, prod-by-claude, x-posting-license) are served to agents alongside the upstream and StartOS skills.',
     es_ES:
-      'Catálogo y referencias de lanzamiento para agentes: catalog_item lee las variables de un elemento del registro antes de instalarlo, catalog_add incorpora valores de variables en el fragmento (vars), import_project copia una película de lanzamiento de HeyGen o una plantilla rebrandeable desde GitHub (incluidos los medios LFS) a un proyecto, y una nueva habilidad hyperframes-launch-references explica cómo estudiarlas y rebrandearlas.',
+      'Studio funciona en el teléfono: por debajo de 600 px la vista previa y la línea de tiempo ocupan todo el ancho, la cabecera se ajusta para que Exportar quede accesible y una barra inferior alterna entre Vista previa, Línea de tiempo y el menú de paneles. Seis habilidades de la comunidad HyperFrames (vox-explainer, camera-3d-captions, duo, p5-paint-animation, prod-by-claude, x-posting-license) se sirven a los agentes junto con las habilidades upstream y de StartOS.',
     de_DE:
-      'Katalog und Launch-Referenzen für Agenten: catalog_item liest die Variablen eines Registry-Elements vor der Installation, catalog_add schreibt Variablenwerte in das Snippet (vars), import_project kopiert einen HeyGen-Launch-Film oder eine umbrandbare Vorlage von GitHub (inklusive LFS-Medien) in ein Projekt, und ein neuer Skill hyperframes-launch-references erklärt, wie man sie studiert und umbrandet.',
+      'Studio funktioniert auf dem Telefon: unter 600 px nehmen Vorschau und Zeitleiste die volle Breite ein, die Kopfzeile bricht um, damit Export erreichbar bleibt, und eine untere Leiste wechselt zwischen Vorschau, Zeitleiste und dem Panel-Menü. Sechs HyperFrames-Community-Skills (vox-explainer, camera-3d-captions, duo, p5-paint-animation, prod-by-claude, x-posting-license) werden Agenten neben den Upstream- und StartOS-Skills bereitgestellt.',
     pl_PL:
-      'Katalog i materiały referencyjne launchy dla agentów: catalog_item odczytuje zmienne elementu rejestru przed instalacją, catalog_add wstawia wartości zmiennych do fragmentu (vars), import_project kopiuje film launchowy HeyGen lub szablon do rebrandingu z GitHub (wraz z mediami LFS) do projektu, a nowa umiejętność hyperframes-launch-references wyjaśnia, jak je studiować i rebrandować.',
+      'Studio działa na telefonie: poniżej 600 px podgląd i oś czasu zajmują całą szerokość, nagłówek zawija się, aby przycisk Eksport był dostępny, a dolny pasek przełącza między Podglądem, Osią czasu i menu paneli. Sześć umiejętności społeczności HyperFrames (vox-explainer, camera-3d-captions, duo, p5-paint-animation, prod-by-claude, x-posting-license) jest udostępnianych agentom obok umiejętności upstream i StartOS.',
     fr_FR:
-      'Catalogue et références de lancement pour les agents : catalog_item lit les variables d’un élément du registre avant l’installation, catalog_add intègre les valeurs des variables dans l’extrait (vars), import_project copie un film de lancement HeyGen ou un modèle rebrandable depuis GitHub (médias LFS inclus) dans un projet, et une nouvelle compétence hyperframes-launch-references explique comment les étudier et les rebrander.',
+      'Studio fonctionne sur téléphone : sous 600 px, l’aperçu et la timeline occupent toute la largeur, l’en-tête passe à la ligne pour que Exporter reste accessible, et une barre en bas bascule entre Aperçu, Timeline et le menu des panneaux. Six compétences communautaires HyperFrames (vox-explainer, camera-3d-captions, duo, p5-paint-animation, prod-by-claude, x-posting-license) sont servies aux agents avec les compétences upstream et StartOS.',
   },
   migrations: {
     up: async ({ effects }) => {},

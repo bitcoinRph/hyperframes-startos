@@ -44,6 +44,7 @@ One image, built from the `Dockerfile` in this repository (`dockerBuild: {}`), m
 | Base          | `node:22-bookworm-slim`                                                                                 |
 | Architectures | x86_64, aarch64                                                                                         |
 | Runtime       | the published `hyperframes` npm package at `HYPERFRAMES_VERSION`, FFmpeg, Chromium shared libraries, Noto/Liberation/DejaVu fonts |
+| Studio patch  | `assets/patch-studio.mjs` links `studio-mobile.css`/`.js` from the installed Studio bundle (see Studio on a Phone)                 |
 | Browser       | pinned `chrome-headless-shell` (chrome-for-testing on amd64, Playwright's build on arm64) at `/opt/chrome/chrome-headless-shell`, exported as `PRODUCER_HEADLESS_SHELL_PATH` for BeginFrame capture; Debian `chromium` as the fallback |
 | Extra         | `/opt/hyperframes-startos/server` (the agent API and MCP server), `/opt/hyperframes/skills` and `/opt/hyperframes-startos/skills` (the skills library) |
 
@@ -147,7 +148,11 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 
 ## Skills Library
 
-`skills/` holds the StartOS-specific skills; the upstream skills come from the `hyperframes/` submodule. Both are copied into the image and served at `/skills/` and as MCP resources. See `skills/README.md`.
+`skills/` holds the StartOS-specific skills; the upstream skills come from the `hyperframes/` submodule; six community skills come from the `community-skills/` submodule (`heygen-com/hyperframes-community-skills`, pinned). All three trees are copied into the image and served at `/skills/` and as MCP resources, in that precedence order (`HF_SKILLS_DIRS`). The two community skills that film an agent's own chat history (`day-in-my-life`, `session-story`) are not copied. Community skills carry scripts that run on the agent's own machine, not on this server; `skills/README.md` has the routing table. See `skills/README.md`.
+
+## Studio on a Phone
+
+Upstream Studio lays its panels out with a fixed floor: a 360 px preview plus two 120 px side columns. On any viewport under 600 px wide the dock overflows and clips by design, and the header's Export button sits off-screen. This package adds a phone overlay at image build time (`assets/studio-mobile.css`, `assets/studio-mobile.js`, installed by `assets/patch-studio.mjs` into the CLI's `dist/studio`): under 600 px the header wraps, the desktop-app button is hidden, the side groups are closed once so the preview and timeline take the full width, and a bottom bar offers **Preview**, **Timeline** (maximize or restore that group) and **Panels** (Studio's own Window menu, where every panel and Reset layout live). The overlay drives Studio only through controls Studio renders itself, so it needs no change to the upstream bundle; the patch fails the image build if those controls disappear in a newer Studio, and the files are served under content-hashed names because the studio server marks `/assets/*` immutable. Nothing changes at 600 px and above. Landscape phones and tablets fit without it.
 
 ## Health Checks
 
