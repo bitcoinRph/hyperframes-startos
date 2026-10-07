@@ -127,7 +127,8 @@ Source: `server/`. Hono on `@hono/node-server`, Node 22. OpenAPI 3.1 at `GET /op
 | `POST /api/v1/projects/:p/upload`, `.../fetch`      | multipart upload; download a URL into the project                        |
 | `POST /api/v1/projects/:p/lint`, `.../check`, `.../snapshot` | `lint --json`, `check --json`, `snapshot` into `snapshots/<run>/` |
 | `GET /api/v1/projects/:p/timeline`, `.../info`      | `timeline --json`, `info --json`                                         |
-| `GET /api/v1/catalog`, `POST /api/v1/projects/:p/catalog/add` | `catalog --json`, `add <name> --no-clipboard --json`           |
+| `GET /api/v1/catalog`, `GET /api/v1/catalog/:name`, `POST /api/v1/projects/:p/catalog/add` | `catalog --json`; one item's `registry-item.json` from the registry (variables, files); `add <name> --no-clipboard --json [--vars json] [--force]` |
+| `POST /api/v1/projects/import`                      | Copy a directory of a public GitHub repository into a new project, Git LFS media included (`server/src/importer.ts`); built for `heygen-com/hyperframes-launches` |
 | `POST /api/v1/projects/:p/renders`                  | queue `hyperframes render` → job (202)                                   |
 | `GET /api/v1/renders[/:id][?log=1]`, `DELETE /api/v1/renders/:id`, `GET /api/v1/renders/:id/download` | jobs, status, cancel, download |
 | `GET/POST /api/v1/studio`                           | which project Studio serves; switch it                                   |
@@ -142,7 +143,7 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 
 ## MCP Server
 
-`POST <api>/mcp`, Streamable HTTP, stateless (`sessionIdGenerator: undefined`, JSON responses enabled), built with `@modelcontextprotocol/sdk`. Tools: `server_info doctor list_projects create_project get_project delete_project list_files read_file write_file delete_file fetch_asset lint check snapshot timeline project_info catalog_search catalog_add render_video get_render_status list_renders cancel_render studio_status studio_open run_cli list_skills read_skill list_skill_files`. `snapshot` returns PNGs as image content. Resources: `hyperframes://skills/{skill}/{path}` and `hyperframes://server/info`. Tool names shared with HeyGen's hosted connector (`list_projects`, `get_project`, `render_video`, `get_render_status`) keep the same meaning.
+`POST <api>/mcp`, Streamable HTTP, stateless (`sessionIdGenerator: undefined`, JSON responses enabled), built with `@modelcontextprotocol/sdk`. Tools: `server_info doctor list_projects create_project import_project get_project delete_project list_files read_file write_file delete_file fetch_asset lint check snapshot timeline project_info catalog_search catalog_item catalog_add render_video get_render_status list_renders cancel_render studio_status studio_open run_cli list_skills read_skill list_skill_files`. `snapshot` returns PNGs as image content. Resources: `hyperframes://skills/{skill}/{path}` and `hyperframes://server/info`. Tool names shared with HeyGen's hosted connector (`list_projects`, `get_project`, `render_video`, `get_render_status`) keep the same meaning.
 
 ## Skills Library
 
@@ -166,7 +167,7 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 3. **No whisper, no Kokoro, no MusicGen.** `transcribe`, local `tts` and local music fall back are unavailable unless a future image adds them; `doctor` reports this. Hosted voices work with provider keys.
 4. **No hosted features.** `publish`, `cloud`, `lambda`, `cloudrun`, `auth login`, the desktop-app hand-off and telemetry are disabled or refused.
 5. **`render --docker` is unavailable**; the service already is the container, with the pinned headless shell that `--docker` would provide.
-6. **Outbound network** is needed for CDN scripts in compositions (the template loads GSAP from jsDelivr), Google Fonts, the registry (`catalog`, `add`, `init --example`) and provider APIs.
+6. **Outbound network** is needed for CDN scripts in compositions (the template loads GSAP from jsDelivr), Google Fonts, the registry (`catalog`, `add`, `catalog_item`, `init --example`: `raw.githubusercontent.com`), `import_project` (`api.github.com`, `raw.githubusercontent.com`, `media.githubusercontent.com`) and provider APIs. `HF_REGISTRY_URL` points `catalog_item` at another registry; the CLI reads its own from the project's `hyperframes.json`.
 7. **Low-memory detection reads host RAM**, as upstream documents for containers; force it in **Configure Rendering** on small servers.
 8. **The upstream project `AGENTS.md`/`CLAUDE.md`** written by `init` tell a local agent to run `npx hyperframes`; on this server those commands map to the API (`skills/hyperframes-server`).
 

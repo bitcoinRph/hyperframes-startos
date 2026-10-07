@@ -28,6 +28,8 @@
 2. Review in Studio. When the agent switches Studio to the project, reload the Studio tab, or run **Open Project in Studio** yourself and pick the project.
 3. Download the render from the link the agent gives you, or open the project's `renders/` folder in Studio.
 
+Your agent can also start from HeyGen's own launch videos. Ask for "a product sting like HeyGen's, for my brand": the agent imports one of the four re-brandable templates from the public `hyperframes-launches` repository, replaces the logos, copy and colors, and renders. HeyGen's media and fonts are not licensed for reuse, so the agent swaps them out.
+
 Studio shows one project at a time. **Open Project in Studio** changes which one; only Studio restarts, and renders keep going.
 
 ## Actions

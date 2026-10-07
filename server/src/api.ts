@@ -4,7 +4,9 @@ import { Readable } from 'node:stream'
 import { Hono } from 'hono'
 import type { Context, Next } from 'hono'
 import { stream } from 'hono/streaming'
+import { type CatalogItemType, catalogItem, catalogItemTypes } from './catalog.js'
 import { config } from './config.js'
+import { type ImportOptions, importProject } from './importer.js'
 import {
   absoluteFile,
   deleteProjectPath,
@@ -120,6 +122,11 @@ export function createApp(): Hono {
     if (typeof input.name !== 'string') throw new ApiError(400, 'name is required')
     return c.json(await createProject(input), 201)
   })
+  api.post('/projects/import', async (c) => {
+    const input = await body<ImportOptions>(c)
+    if (typeof input.name !== 'string' || typeof input.repo !== 'string') throw new ApiError(400, 'name and repo are required')
+    return c.json(await importProject(input), 201)
+  })
   api.get('/projects/:project', async (c) => {
     const name = c.req.param('project')
     return c.json({ ...(await summarize(name)), files: await listFiles(name), studio: await studioStatus() })
@@ -185,9 +192,14 @@ export function createApp(): Hono {
   api.get('/projects/:project/timeline', async (c) => c.json(await projectJson(c.req.param('project'), ['timeline'])))
   api.get('/projects/:project/info', async (c) => c.json(await projectJson(c.req.param('project'), ['info'])))
   api.post('/projects/:project/catalog/add', async (c) => {
-    const input = await body<{ name: string }>(c)
+    const input = await body<{ name: string; vars?: Record<string, unknown>; force?: boolean }>(c)
     if (typeof input.name !== 'string') throw new ApiError(400, 'name is required')
-    return c.json(await catalogAdd(c.req.param('project'), input.name))
+    return c.json(await catalogAdd(c.req.param('project'), input.name, { vars: input.vars, force: input.force }))
+  })
+  api.get('/catalog/:name', async (c) => {
+    const type = c.req.query('type')
+    if (type !== undefined && !catalogItemTypes.includes(type as CatalogItemType)) throw new ApiError(400, 'type must be block, component or example')
+    return c.json(await catalogItem(c.req.param('name'), type as CatalogItemType | undefined))
   })
   api.get('/catalog', async (c) =>
     c.json(

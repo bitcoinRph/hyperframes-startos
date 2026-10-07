@@ -36,7 +36,9 @@ export const config = {
     .split(':')
     .filter(Boolean)
     .map((d) => resolve(d)),
-  version: process.env.HF_SERVER_VERSION ?? '0.1.1',
+  /** Registry the CLI installs from; `catalog_item` reads item manifests from the same place. */
+  registryUrl: (process.env.HF_REGISTRY_URL ?? 'https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry').replace(/\/$/, ''),
+  version: process.env.HF_SERVER_VERSION ?? '0.2.0',
   hyperframesVersion: process.env.HYPERFRAMES_VERSION ?? 'unknown',
 } as const
 

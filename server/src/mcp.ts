@@ -33,6 +33,8 @@ import {
   snapshotProject,
 } from './ops.js'
 import { createProject, deleteProject, listProjects, projectJson, resolutions, summarize } from './projects.js'
+import { catalogItem, catalogItemTypes } from './catalog.js'
+import { importProject } from './importer.js'
 import { listSkills, readSkillFile, skillFiles } from './skills.js'
 import { openInStudio, studioStatus } from './studio.js'
 import { allowedCliCommands } from './util/cli.js'
@@ -127,6 +129,22 @@ export function createMcpServer(): McpServer {
       },
     },
     async (input) => guard(async () => text(await createProject(input))),
+  )
+
+  server.registerTool(
+    'import_project',
+    {
+      title: 'Import a project from GitHub',
+      description:
+        'Copy a directory of a public GitHub repository into a new project: HTML, compositions, assets, fonts and the production documents beside them. Git LFS media is fetched in full. Built for heygen-com/hyperframes-launches: path "heygen-apple-motion/01-ui-sting" imports a re-brandable template; "hyperframes-launch" imports a whole launch film with its STORYBOARD.md and HANDOFF.md. The directory must hold an index.html. Read the project README before changing anything; bundled fonts and logos keep their own licenses.',
+      inputSchema: {
+        name: project,
+        repo: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).describe('owner/repo'),
+        path: z.string().optional().describe('Directory inside the repository; omit for the root'),
+        ref: z.string().optional().describe('Branch, tag or commit; default main'),
+      },
+    },
+    async (input) => guard(async () => text(await importProject(input))),
   )
 
   server.registerTool(
@@ -313,13 +331,31 @@ export function createMcpServer(): McpServer {
   )
 
   server.registerTool(
+    'catalog_item',
+    {
+      title: 'Read a catalog item',
+      description:
+        'The registry manifest of one block, component or example: title, description, tags, canvas, duration, files and, above all, the variables it exposes (ids, types, defaults). Read it before catalog_add so vars can set brand copy, colors and logos at install time.',
+      inputSchema: { name: z.string(), type: z.enum(catalogItemTypes).optional() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ name, type }) => guard(async () => text(await catalogItem(name, type))),
+  )
+
+  server.registerTool(
     'catalog_add',
     {
       title: 'Install a catalog item',
-      description: 'Install a registry block, component, or every block with a tag into the project (`hyperframes add`). Returns the written files and the paste snippet.',
-      inputSchema: { project, name: z.string() },
+      description:
+        'Install a registry block, component, or every block with a tag into the project (`hyperframes add`). Returns the written files and the paste snippet. `vars` bakes variable values (see catalog_item) into the snippet as data-variable-values.',
+      inputSchema: {
+        project,
+        name: z.string(),
+        vars: z.record(z.string(), z.unknown()).optional().describe('Variable id → value, baked into the snippet'),
+        force: z.boolean().optional().describe('Overwrite files edited since the last install'),
+      },
     },
-    async ({ project: name, name: item }) => guard(async () => text(await catalogAdd(name, item))),
+    async ({ project: name, name: item, vars, force }) => guard(async () => text(await catalogAdd(name, item, { vars, force }))),
   )
 
   server.registerTool(

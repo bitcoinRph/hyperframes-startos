@@ -109,6 +109,20 @@ export function openapi(serverUrls: string[]) {
           responses: { '201': { description: 'Created', content: json({ $ref: '#/components/schemas/Project' }) } },
         },
       },
+      '/api/v1/projects/import': {
+        post: {
+          summary: 'Import a directory of a public GitHub repository as a project (LFS media included)',
+          requestBody: {
+            required: true,
+            content: json({
+              type: 'object',
+              required: ['name', 'repo'],
+              properties: { name: { type: 'string' }, repo: { type: 'string', example: 'heygen-com/hyperframes-launches' }, path: { type: 'string', example: 'heygen-apple-motion/01-ui-sting' }, ref: { type: 'string', default: 'main' } },
+            }),
+          },
+          responses: { '201': { description: 'Imported', content: json({ $ref: '#/components/schemas/Project' }) } },
+        },
+      },
       '/api/v1/projects/{project}': {
         parameters: [projectParam],
         get: { summary: 'Project summary plus file tree and Studio status', responses: ok() },
@@ -166,7 +180,7 @@ export function openapi(serverUrls: string[]) {
       '/api/v1/projects/{project}/info': { parameters: [projectParam], get: { summary: 'hyperframes info --json', responses: ok() } },
       '/api/v1/projects/{project}/catalog/add': {
         parameters: [projectParam],
-        post: { summary: 'hyperframes add <name>', requestBody: { required: true, content: json({ type: 'object', required: ['name'], properties: { name: { type: 'string' } } }) }, responses: ok() },
+        post: { summary: 'hyperframes add <name> [--vars json] [--force]', requestBody: { required: true, content: json({ type: 'object', required: ['name'], properties: { name: { type: 'string' }, vars: { type: 'object' }, force: { type: 'boolean' } } }) }, responses: ok() },
       },
       '/api/v1/projects/{project}/renders': {
         parameters: [projectParam],
@@ -176,6 +190,13 @@ export function openapi(serverUrls: string[]) {
           requestBody: { content: json({ $ref: '#/components/schemas/RenderRequest' }) },
           responses: { '202': { description: 'Queued', content: json({ $ref: '#/components/schemas/RenderJob' }) } },
         },
+      },
+      '/api/v1/catalog/{name}': {
+        parameters: [
+          { name: 'name', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['block', 'component', 'example'] } },
+        ],
+        get: { summary: 'One registry item manifest: variables, files, canvas, tags', responses: ok() },
       },
       '/api/v1/catalog': {
         parameters: [

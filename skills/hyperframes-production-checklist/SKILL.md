@@ -19,8 +19,16 @@ Work the list top to bottom. A gate that cannot be checked is reported, not skip
       with stated assumptions.
 - [ ] **Project scaffolded** with `create_project` at the right `resolution`; the root
       `data-width`/`data-height` match the brief.
+- [ ] **Storyboard modeled on a finished one.** For a launch, promo or announcement, the
+      storyboard follows the shape of a `hyperframes-launches` storyboard (format line, VO
+      and music direction, guardrails, timecoded beats); see `/hyperframes-launch-references`.
 - [ ] **Registry first.** For every named look, effect or transition, `catalog_search` ran
-      before hand-building, and installs happened before parallel work.
+      before hand-building, `catalog_item` was read for the variables, and `catalog_add` set
+      them with `vars` (brand name, colors, logo paths) instead of editing the installed file.
+      Installs happened before parallel work.
+- [ ] **Imported material re-branded.** A project from `import_project` has no HeyGen marks,
+      screenshots or commercial fonts left unless the user owns the rights; see the license
+      section of `/hyperframes-launch-references`.
 - [ ] **Media present.** Every `src` in the composition points at a file inside the project
       (`list_files` shows it) or at a URL the server can fetch. Footage with sound carries
       `data-has-audio="true"`; silent footage is `muted`. Every `<video>`/`<audio>` has an `id`.

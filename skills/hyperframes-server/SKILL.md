@@ -48,6 +48,10 @@ ElevenLabs, configured by the owner in **Configure Provider Keys**) or an audio 
   (`/api/v1/projects/<p>/files/<path>`). Text goes as UTF-8; media goes as `encoding:
   "base64"`, a multipart `POST /api/v1/projects/<p>/upload`, or `fetch_asset` when the file is
   already on the web.
+- Start from a finished project instead of a blank one with `import_project`
+  (`POST /api/v1/projects/import`): a directory of a public GitHub repository, LFS media
+  included. `/hyperframes-launch-references` lists HeyGen's launch films and the four
+  re-brandable templates this was built for.
 - Projects are deleted with `delete_project` (`confirm: true`). Renders live inside the
   project under `renders/`, so deleting a project deletes its videos.
 
@@ -64,8 +68,11 @@ arguments verbatim, no shell; add `--json` where the command supports it.
 | `hyperframes snapshot --at ...`                    | `snapshot` (returns PNGs inline over MCP; files land in `snapshots/`)                  |
 | `hyperframes timeline --json`                      | `timeline` (`GET /projects/<p>/timeline`)                                              |
 | `hyperframes info --json`                          | `project_info` (`GET /projects/<p>/info`)                                              |
-| `hyperframes catalog --query "..."`                | `catalog_search` (`GET /api/v1/catalog?query=`)                                        |
-| `hyperframes add <item>`                           | `catalog_add` (`POST /projects/<p>/catalog/add`)                                       |
+| `hyperframes catalog --query "..."`                | `catalog_search` (`GET /api/v1/catalog?query=`); word search, English queries           |
+| (read one item's `registry-item.json`)             | `catalog_item` (`GET /api/v1/catalog/<name>`): variables, defaults, files, canvas       |
+| `hyperframes add <item> [--vars '{...}']`          | `catalog_add` with `vars` (`POST /projects/<p>/catalog/add`)                            |
+| `hyperframes catalog --on-device`                  | Not available: the model download needs an interactive terminal. Word search is used.  |
+| `git clone` a launch film or template              | `import_project` (`POST /api/v1/projects/import`); see `/hyperframes-launch-references` |
 | `hyperframes render ...`                           | `render_video` → job id → `get_render_status` (`POST /projects/<p>/renders`)           |
 | `hyperframes preview`                              | `studio_open` + `studio_status`; give the user the project URL                         |
 | `hyperframes keyframes`, `beats`, `compositions`, `history`, `media-treatment`, `normalize-audio`, `compare`, `grade-compare` | `run_cli` with the same arguments |
@@ -84,8 +91,10 @@ steps with the tools above. The server-specific shape:
 
 1. **Brief and plan** exactly as the upstream workflow says. Write `BRIEF.md`, `STORYBOARD.md`,
    `frame.md` into the project with `write_file`; they are plain files.
-2. **Scaffold**: `create_project`. Install registry blocks the plan names with `catalog_add`
-   **before** any parallel work.
+2. **Scaffold**: `create_project`, or `import_project` when a launch template fits the brief.
+   For every named look, run `catalog_search`, read `catalog_item` for its variables, then
+   `catalog_add` with `vars` holding the brand copy and colors. Do this **before** any
+   parallel work.
 3. **Media**: upload or `fetch_asset` the user's footage, images and music into `assets/`.
    Generate voice with `run_cli ["tts", ...]` only if `doctor` shows Kokoro, or a provider key
    is configured; otherwise ask the user for narration audio or skip narration.
