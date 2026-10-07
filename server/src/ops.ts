@@ -109,10 +109,31 @@ export async function catalogSearch(options: CatalogOptions): Promise<unknown> {
   return parsed
 }
 
-export async function catalogAdd(project: string, name: string): Promise<unknown> {
+export type CatalogAddOptions = {
+  /** Variable values baked into the returned snippet as `data-variable-values`. */
+  vars?: Record<string, unknown>
+  /** Overwrite files the project edited since the item was installed. */
+  force?: boolean
+}
+
+export function catalogAddArgs(name: string, dir: string, options: CatalogAddOptions = {}): string[] {
   if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(name)) throw badRequest('name must be a registry item or tag slug')
+  const args = ['add', name, '--dir', dir, '--no-clipboard', '--json']
+  if (options.vars !== undefined) {
+    if (typeof options.vars !== 'object' || options.vars === null || Array.isArray(options.vars)) {
+      throw badRequest('vars must be an object of variable values')
+    }
+    const json = JSON.stringify(options.vars)
+    if (json.length > 16_000) throw badRequest('vars is too large')
+    args.push('--vars', json)
+  }
+  if (options.force) args.push('--force')
+  return args
+}
+
+export async function catalogAdd(project: string, name: string, options: CatalogAddOptions = {}): Promise<unknown> {
   const dir = await requireProject(project)
-  const result = await runCli(['add', name, '--dir', dir, '--no-clipboard', '--json'], {
+  const result = await runCli(catalogAddArgs(name, dir, options), {
     cwd: dir,
     timeoutMs: 5 * 60_000,
   })

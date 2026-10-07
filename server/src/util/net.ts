@@ -93,26 +93,28 @@ export const resolvePublicHost: HostResolver = async (hostname) => {
   return records[0].address
 }
 
-export type DownloadOptions = {
-  maxBytes: number
+export type FetchOptions = {
   maxRedirects?: number
   timeoutMs?: number
+  /** Extra request headers, for example an `accept` for a JSON API. */
+  headers?: Record<string, string>
   /** Test seam; defaults to the public-host policy. */
   resolveHost?: HostResolver
 }
+
+export type DownloadOptions = FetchOptions & { maxBytes: number }
 
 export type DownloadResult = { bytes: number; contentType: string | null; finalUrl: string }
 
 const redirectStatuses = new Set([301, 302, 303, 307, 308])
 
 /**
- * Streams an http(s) URL into a file. Each hop, redirects included, goes
- * through `resolveHost`, and the socket connects to the address it returned,
- * so a name cannot be re-pointed at a private address between check and use.
- * The byte limit applies to the body as it arrives, not to a header the
- * remote end chooses.
+ * Opens an http(s) URL and follows redirects. Each hop goes through
+ * `resolveHost`, and the socket connects to the address it returned, so a
+ * name cannot be re-pointed at a private address between check and use.
+ * Resolves with the first non-redirect 2xx response, body unread.
  */
-export async function downloadToFile(url: URL, destination: string, options: DownloadOptions): Promise<DownloadResult> {
+export async function openPublicUrl(url: URL, options: FetchOptions = {}): Promise<{ response: IncomingMessage; finalUrl: URL }> {
   const maxRedirects = options.maxRedirects ?? 5
   const resolveHost = options.resolveHost ?? resolvePublicHost
   const signal = AbortSignal.timeout(options.timeoutMs ?? 10 * 60_000)
@@ -120,7 +122,7 @@ export async function downloadToFile(url: URL, destination: string, options: Dow
   for (let hop = 0; ; hop++) {
     if (current.protocol !== 'http:' && current.protocol !== 'https:') throw badRequest('url must be http or https')
     const address = await resolveHost(current.hostname)
-    const res = await open(current, address, signal)
+    const res = await open(current, address, signal, options.headers ?? {})
     const status = res.statusCode ?? 0
     if (redirectStatuses.has(status)) {
       res.resume()
@@ -134,30 +136,55 @@ export async function downloadToFile(url: URL, destination: string, options: Dow
       res.resume()
       throw badRequest(`fetch failed with HTTP ${status}`)
     }
-    const declared = Number(res.headers['content-length'] ?? '0')
-    if (declared > options.maxBytes) {
-      res.destroy()
-      throw badRequest(`remote file exceeds ${options.maxBytes} bytes`)
-    }
-    let bytes = 0
-    const limiter = new Transform({
-      transform(chunk: Buffer, _enc, cb) {
-        bytes += chunk.length
-        if (bytes > options.maxBytes) cb(badRequest(`remote file exceeds ${options.maxBytes} bytes`))
-        else cb(null, chunk)
-      },
-    })
-    await pipeline(res, limiter, createWriteStream(destination), { signal })
-    return { bytes, contentType: res.headers['content-type'] ?? null, finalUrl: current.href }
+    return { response: res, finalUrl: current }
   }
 }
 
-function open(url: URL, address: string, signal: AbortSignal): Promise<IncomingMessage> {
+function limitedBody(res: IncomingMessage, maxBytes: number): { limiter: Transform; count: () => number } {
+  const declared = Number(res.headers['content-length'] ?? '0')
+  if (declared > maxBytes) {
+    res.destroy()
+    throw badRequest(`remote file exceeds ${maxBytes} bytes`)
+  }
+  let bytes = 0
+  const limiter = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      bytes += chunk.length
+      if (bytes > maxBytes) cb(badRequest(`remote file exceeds ${maxBytes} bytes`))
+      else cb(null, chunk)
+    },
+  })
+  return { limiter, count: () => bytes }
+}
+
+/**
+ * Streams an http(s) URL into a file. The byte limit applies to the body as
+ * it arrives, not to a header the remote end chooses.
+ */
+export async function downloadToFile(url: URL, destination: string, options: DownloadOptions): Promise<DownloadResult> {
+  const { response, finalUrl } = await openPublicUrl(url, options)
+  const { limiter, count } = limitedBody(response, options.maxBytes)
+  await pipeline(response, limiter, createWriteStream(destination))
+  return { bytes: count(), contentType: response.headers['content-type'] ?? null, finalUrl: finalUrl.href }
+}
+
+/** Reads a small http(s) resource into memory under the same policy and limit. */
+export async function downloadToBuffer(url: URL, options: DownloadOptions): Promise<DownloadResult & { buffer: Buffer }> {
+  const { response, finalUrl } = await openPublicUrl(url, options)
+  const { limiter, count } = limitedBody(response, options.maxBytes)
+  const chunks: Buffer[] = []
+  await pipeline(response, limiter, async function* (source) {
+    for await (const chunk of source) chunks.push(chunk as Buffer)
+  })
+  return { bytes: count(), buffer: Buffer.concat(chunks), contentType: response.headers['content-type'] ?? null, finalUrl: finalUrl.href }
+}
+
+function open(url: URL, address: string, signal: AbortSignal, extraHeaders: Record<string, string>): Promise<IncomingMessage> {
   const family = isIP(address)
   const request = url.protocol === 'https:' ? httpsRequest : httpRequest
   const options: RequestOptions = {
     method: 'GET',
-    headers: { 'user-agent': 'hyperframes-startos/1.0', accept: '*/*' },
+    headers: { 'user-agent': 'hyperframes-startos/1.0', accept: '*/*', ...extraHeaders },
     signal,
     // Pins the connection to the vetted address; TLS still verifies the name.
     lookup: (_hostname, opts, cb) => {
