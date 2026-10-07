@@ -59,3 +59,20 @@ Domain skills:
 | `/figma`                 | Importing Figma assets, tokens, components and storyboards.                                        |
 
 On this server the upstream skills' shell commands become tool calls. `/hyperframes-server` carries the mapping.
+
+## Community skills (served from the service, run on your machine)
+
+Six skills from [heygen-com/hyperframes-community-skills](https://github.com/heygen-com/hyperframes-community-skills) (pinned in the `community-skills/` submodule) are served as a third tree. Upstream's caution applies: they are not curated, and a skill can run commands or call network services, so read a skill's `SKILL.md` and scripts before you follow it. Their scripts (Node, Python, Puppeteer, FFmpeg) run on the agent's own machine; this server runs only `hyperframes` commands. Build locally, then bring the project here with `import_project` from your own repository, `upload`, or `write_file`, and lint, check, review and render on the server.
+
+| Skill                  | Use for                                                        | Runs on the agent's machine                              | Comes to the server as            |
+| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------- |
+| `/vox-explainer`       | 60–90 s collage explainers from a topic, document or link      | Node 22 seam scripts and a local Chrome for the seam gate; the rest is a prose workflow | `create_project` + `write_file`; `tts` via `run_cli` |
+| `/camera-3d-captions`  | Captions in 3D space around a talking head                     | Python (fonttools, numpy, pillow), a word-level transcriber, FFmpeg | the kit JS and the composition via `write_file` or `upload` |
+| `/duo`                 | Two UI screens on a foldable-phone plate, side by side         | Node 18, one build script                                | the generated project via `import_project` or `upload` |
+| `/p5-paint-animation`  | Handwriting, paint-on and living-painting animations           | Node, Puppeteer with Chrome, p5, FFmpeg (about 500 MB)   | rendered frames or clips via `upload` |
+| `/prod-by-claude`      | Strudel live-coding music videos                               | Puppeteer, Chrome for Testing, a 5–7 min recording       | the generated project via `upload` |
+| `/x-posting-license`   | Animated "posting license" card for an X profile               | Node; calls `api.fxtwitter.com`                          | the generated project via `upload` |
+
+Not served: `day-in-my-life` and `session-story`. They film the agent's own chat history from `~/.claude`; upstream says they are not for marketing or anyone else's content.
+
+Install a community skill on a local agent with `npx skills add heygen-com/hyperframes-community-skills --skill <name>`.

@@ -73,6 +73,7 @@ arguments verbatim, no shell; add `--json` where the command supports it.
 | `hyperframes add <item> [--vars '{...}']`          | `catalog_add` with `vars` (`POST /projects/<p>/catalog/add`)                            |
 | `hyperframes catalog --on-device`                  | Not available: the model download needs an interactive terminal. Word search is used.  |
 | `git clone` a launch film or template              | `import_project` (`POST /api/v1/projects/import`); see `/hyperframes-launch-references` |
+| `node <skill>/scripts/*.mjs`, `python3 scripts/*.py` (community skills) | Not on the server. Run them where you run; bring the result here with `import_project`, `upload` or `write_file`. See `skills/README.md`, Community skills. |
 | `hyperframes render ...`                           | `render_video` → job id → `get_render_status` (`POST /projects/<p>/renders`)           |
 | `hyperframes preview`                              | `studio_open` + `studio_status`; give the user the project URL                         |
 | `hyperframes keyframes`, `beats`, `compositions`, `history`, `media-treatment`, `normalize-audio`, `compare`, `grade-compare` | `run_cli` with the same arguments |

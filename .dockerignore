@@ -8,3 +8,5 @@ server/dist/**
 !skills/**
 !hyperframes/skills/**
 !hyperframes/LICENSE
+!community-skills/skills/**
+!community-skills/LICENSE
