@@ -70,19 +70,18 @@ COPY --from=server-build /build/server/dist /opt/hyperframes-startos/server/dist
 COPY --from=server-build /build/server/node_modules /opt/hyperframes-startos/server/node_modules
 COPY --from=server-build /build/server/package.json /opt/hyperframes-startos/server/package.json
 
-# Skills library: the upstream skills at the pinned version, this package's
-# own skills, and the community skills that fit server work (the pinned
-# community-skills submodule; the two that film an agent's own chat history
-# are left out). Served by the API (/skills) and as MCP resources.
+# Four skill roots, each skill packaged once. Community sources stay pinned;
+# the two history-film SKILL.md files receive documented deployment overlays.
+# Scripts/assets remain unchanged and execute on the agent host, not here.
+# Served by the API (/skills) and as MCP resources.
 COPY hyperframes/skills /opt/hyperframes/skills
 COPY skills /opt/hyperframes-startos/skills
 COPY hyperframes/LICENSE /opt/hyperframes/LICENSE
-COPY community-skills/skills/vox-explainer /opt/hyperframes-community/skills/vox-explainer
-COPY community-skills/skills/camera-3d-captions /opt/hyperframes-community/skills/camera-3d-captions
-COPY community-skills/skills/duo /opt/hyperframes-community/skills/duo
-COPY community-skills/skills/p5-paint-animation /opt/hyperframes-community/skills/p5-paint-animation
-COPY community-skills/skills/prod-by-claude /opt/hyperframes-community/skills/prod-by-claude
-COPY community-skills/skills/x-posting-license /opt/hyperframes-community/skills/x-posting-license
+COPY heygen-skills/skills /opt/heygen-skills/skills
+COPY heygen-skills/LICENSE /opt/heygen-skills/LICENSE
+COPY community-skills/skills /opt/hyperframes-community/skills
+COPY community-adaptations/day-in-my-life.SKILL.md /opt/hyperframes-community/skills/day-in-my-life/SKILL.md
+COPY community-adaptations/session-story.SKILL.md /opt/hyperframes-community/skills/session-story/SKILL.md
 COPY community-skills/LICENSE /opt/hyperframes-community/LICENSE
 
 # Studio on a phone: upstream's dock needs 600 px, so phones get a bar and a
@@ -95,8 +94,8 @@ RUN node /opt/hyperframes-startos/studio-mobile/patch-studio.mjs \
 COPY assets/hf-studio assets/hf-server /usr/local/bin/
 RUN chmod +x /usr/local/bin/hf-studio /usr/local/bin/hf-server
 
-ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills:/opt/hyperframes-community/skills
-ENV HF_SERVER_VERSION=0.2.0
+ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills:/opt/hyperframes-community/skills:/opt/heygen-skills/skills
+ENV HF_SERVER_VERSION=0.2.1
 ENV HOME=/data/home
 ENV HYPERFRAMES_PROJECTS_DIR=/data/projects
 ENV HF_STATE_DIR=/data/startos

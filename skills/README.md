@@ -1,6 +1,6 @@
 # Skills library
 
-Ready-made skills for AI agents that make video with this HyperFrames server. Two sets live here:
+Ready-made skills for AI agents that make video with this HyperFrames server. Two sets live here (the community and HeyGen trees below come from their own directories):
 
 1. **Upstream HyperFrames skills** (21). They are the official skills from [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) at the version this package wraps. They are in the `hyperframes/skills/` submodule of this repository, and the service serves the same files at `/skills/<name>/` and as MCP resources (`hyperframes://skills/<name>/SKILL.md`). Do not copy them into this directory. Update them by moving the submodule (see `UPDATING.md`).
 2. **StartOS skills** (this directory). They teach an agent how to use the upstream skills **through this server**, where the agent has no local shell on the machine that renders.
@@ -62,7 +62,7 @@ On this server the upstream skills' shell commands become tool calls. `/hyperfra
 
 ## Community skills (served from the service, run on your machine)
 
-Six skills from [heygen-com/hyperframes-community-skills](https://github.com/heygen-com/hyperframes-community-skills) (pinned in the `community-skills/` submodule) are served as a third tree. Upstream's caution applies: they are not curated, and a skill can run commands or call network services, so read a skill's `SKILL.md` and scripts before you follow it. Their scripts (Node, Python, Puppeteer, FFmpeg) run on the agent's own machine; this server runs only `hyperframes` commands. Build locally, then bring the project here with `import_project` from your own repository, `upload`, or `write_file`, and lint, check, review and render on the server.
+Eight skills from [heygen-com/hyperframes-community-skills](https://github.com/heygen-com/hyperframes-community-skills) (pinned in the `community-skills/` submodule) are served as a third tree. Upstream's caution applies: they are not curated, and a skill can run commands or call network services, so read a skill's `SKILL.md` and scripts before you follow it. Their scripts (Node, Python, Puppeteer, FFmpeg) run on the agent's own machine; this server runs only `hyperframes` commands. Build locally, then bring the project here with `import_project` from your own repository, `upload`, or `write_file`, and lint, check, review and render on the server.
 
 | Skill                  | Use for                                                        | Runs on the agent's machine                              | Comes to the server as            |
 | ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------- |
@@ -72,7 +72,21 @@ Six skills from [heygen-com/hyperframes-community-skills](https://github.com/hey
 | `/p5-paint-animation`  | Handwriting, paint-on and living-painting animations           | Node, Puppeteer with Chrome, p5, FFmpeg (about 500 MB)   | rendered frames or clips via `upload` |
 | `/prod-by-claude`      | Strudel live-coding music videos                               | Puppeteer, Chrome for Testing, a 5–7 min recording       | the generated project via `upload` |
 | `/x-posting-license`   | Animated "posting license" card for an X profile               | Node; calls `api.fxtwitter.com`                          | the generated project via `upload` |
+| `/day-in-my-life` | Ink animation of an approved real work session; internal/personal only | Writable private job copy, Node/Puppeteer, compatible Python/NumPy/SciPy, FFmpeg | private local film; no private-history upload |
+| `/session-story` | Watercolour work-session film from approved real receipts; internal/personal only | Writable private job copy, Node/Python, FFmpeg; Linux: FluidSynth + licensed soundfont | private local film; no private-history upload |
 
-Not served: `day-in-my-life` and `session-story`. They film the agent's own chat history from `~/.claude`; upstream says they are not for marketing or anyone else's content.
+These two are newly served, with source-consent and pre-preview approval gates. Neither harvester supports Hermes natively, and upstream validators are not privacy enforcement. Do not automatically read chat history, memory or instruction files. Keep upstream's no-marketing restriction. `community-adaptations/README.md` documents the exact overlays and shared execution rules: fresh writable per-job copies (some helpers delete shared engine frames), compatible isolated Python, reviewed JavaScript, explicit outbound dependencies and no assumed Linux render parity. All original scripts/assets/references stay unchanged.
 
 Install a community skill on a local agent with `npx skills add heygen-com/hyperframes-community-skills --skill <name>`.
+
+## HeyGen skills (served from the service, run on your machine)
+
+Three skills from [heygen-com/skills](https://github.com/heygen-com/skills), vendored in `heygen-skills/` (the upstream commit and the handful of deployment edits are listed in `heygen-skills/README.md`), are served as a fourth tree. They drive HeyGen's **hosted** products, not HyperFrames: the `heygen` CLI or the HeyGen MCP server runs on the agent's machine and bills the owner's HeyGen account. This server runs none of it. A finished HeyGen video can come here as footage (`upload` or `fetch_asset`) for `/embedded-captions`, `/talking-head-recut` or any composition.
+
+| Skill               | Use for                                                                          | Needs on the agent's machine                              |
+| ------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `/heygen-avatar`    | A persistent avatar (face + voice) for the agent, the owner or a named character | `heygen` CLI signed in, or the HeyGen MCP server          |
+| `/heygen-video`     | A presenter-led video from an idea or script (HeyGen Video Agent, v3)             | same; 20–45 min per video, billed in HeyGen credits       |
+| `/heygen-translate` | Dub an existing video into another language with voice clone and lip-sync        | same; billed by source minutes × languages                |
+
+Install them on a local agent with `gh skill install heygen-com/skills <name>` or `npx skills add heygen-com/skills`.
