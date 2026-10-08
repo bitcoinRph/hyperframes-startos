@@ -28,11 +28,13 @@ async function locate(): Promise<Located[]> {
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function frontmatterDescription(markdown: string): string {
+/** The `description:` of a SKILL.md frontmatter as one line: plain, folded (`>`) or literal (`|`) YAML scalars. */
+export function frontmatterDescription(markdown: string): string {
   const m = markdown.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return ''
   const fm = m[1]
-  const desc = fm.match(/^description:\s*>?-?\s*\n?([\s\S]*?)(?=\n[a-zA-Z_-]+:|$)/m)
+  // The block ends at the next unindented line (the next key) or at the end of the frontmatter.
+  const desc = fm.match(/^description:\s*[>|]?-?\s*\n?([\s\S]*?)(?=\n\S|$(?![\s\S]))/m)
   if (!desc) return ''
   return desc[1]
     .split('\n')

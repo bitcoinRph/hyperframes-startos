@@ -453,7 +453,7 @@ export function createMcpServer(): McpServer {
     'list_skills',
     {
       title: 'List skills',
-      description: 'The skills library on this server: the upstream HyperFrames skills plus the StartOS-specific ones. Read hyperframes-server first.',
+      description: 'The skills library on this server: the upstream HyperFrames skills, the StartOS-specific ones, the community skills, and the HeyGen avatar/video/translate skills. Read hyperframes-server first.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

@@ -1,6 +1,6 @@
 # Skills library
 
-Ready-made skills for AI agents that make video with this HyperFrames server. Two sets live here:
+Ready-made skills for AI agents that make video with this HyperFrames server. Two sets live here (the community and HeyGen trees below come from their own directories):
 
 1. **Upstream HyperFrames skills** (21). They are the official skills from [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) at the version this package wraps. They are in the `hyperframes/skills/` submodule of this repository, and the service serves the same files at `/skills/<name>/` and as MCP resources (`hyperframes://skills/<name>/SKILL.md`). Do not copy them into this directory. Update them by moving the submodule (see `UPDATING.md`).
 2. **StartOS skills** (this directory). They teach an agent how to use the upstream skills **through this server**, where the agent has no local shell on the machine that renders.
@@ -76,3 +76,15 @@ Six skills from [heygen-com/hyperframes-community-skills](https://github.com/hey
 Not served: `day-in-my-life` and `session-story`. They film the agent's own chat history from `~/.claude`; upstream says they are not for marketing or anyone else's content.
 
 Install a community skill on a local agent with `npx skills add heygen-com/hyperframes-community-skills --skill <name>`.
+
+## HeyGen skills (served from the service, run on your machine)
+
+Three skills from [heygen-com/skills](https://github.com/heygen-com/skills), vendored in `heygen-skills/` (the upstream commit and the handful of deployment edits are listed in `heygen-skills/README.md`), are served as a fourth tree. They drive HeyGen's **hosted** products, not HyperFrames: the `heygen` CLI or the HeyGen MCP server runs on the agent's machine and bills the owner's HeyGen account. This server runs none of it. A finished HeyGen video can come here as footage (`upload` or `fetch_asset`) for `/embedded-captions`, `/talking-head-recut` or any composition.
+
+| Skill               | Use for                                                                          | Needs on the agent's machine                              |
+| ------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `/heygen-avatar`    | A persistent avatar (face + voice) for the agent, the owner or a named character | `heygen` CLI signed in, or the HeyGen MCP server          |
+| `/heygen-video`     | A presenter-led video from an idea or script (HeyGen Video Agent, v3)             | same; 20–45 min per video, billed in HeyGen credits       |
+| `/heygen-translate` | Dub an existing video into another language with voice clone and lip-sync        | same; billed by source minutes × languages                |
+
+Install them on a local agent with `gh skill install heygen-com/skills <name>` or `npx skills add heygen-com/skills`.

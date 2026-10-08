@@ -148,7 +148,7 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 
 ## Skills Library
 
-`skills/` holds the StartOS-specific skills; the upstream skills come from the `hyperframes/` submodule; six community skills come from the `community-skills/` submodule (`heygen-com/hyperframes-community-skills`, pinned). All three trees are copied into the image and served at `/skills/` and as MCP resources, in that precedence order (`HF_SKILLS_DIRS`). The two community skills that film an agent's own chat history (`day-in-my-life`, `session-story`) are not copied. Community skills carry scripts that run on the agent's own machine, not on this server; `skills/README.md` has the routing table. See `skills/README.md`.
+`skills/` holds the StartOS-specific skills; the upstream skills come from the `hyperframes/` submodule; six community skills come from the `community-skills/` submodule (`heygen-com/hyperframes-community-skills`, pinned); the three HeyGen agent skills (`heygen-avatar`, `heygen-video`, `heygen-translate`) are a vendored copy of `heygen-com/skills` in `heygen-skills/`, with the upstream commit and the deployment edits listed in `heygen-skills/README.md`. All four trees are copied into the image and served at `/skills/` and as MCP resources, in that precedence order (`HF_SKILLS_DIRS`). The two community skills that film an agent's own chat history (`day-in-my-life`, `session-story`) are not copied. Community and HeyGen skills run on the agent's own machine, not on this server; `skills/README.md` has the routing tables.
 
 ## Studio on a Phone
 

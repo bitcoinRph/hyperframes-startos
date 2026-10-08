@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { buildRenderArgs } from '../src/jobs.ts'
+import { frontmatterDescription } from '../src/skills.ts'
 import { assertAllowedCli, parseJsonOutput } from '../src/util/cli.ts'
 import { assertProjectName, resolveInside } from '../src/util/paths.ts'
 
@@ -67,4 +68,14 @@ test('run_cli upgrade cannot replace the pinned CLI', () => {
 test('parseJsonOutput finds the trailing JSON document', () => {
   assert.deepEqual(parseJsonOutput('progress 1\nprogress 2\n{"ok":true}\n'), { ok: true })
   assert.equal(parseJsonOutput('no json here'), null)
+})
+
+test('skill descriptions are read from folded, literal and plain frontmatter', () => {
+  const plain = '---\nname: a\ndescription: One line.\n---\n# A'
+  const folded = '---\nname: b\ndescription: >\n  Two\n  lines.\n---\n# B'
+  const literal = '---\nversion: 3.2.0 # x\nname: c\ndescription: |\n  Literal block,\n  second line.\nargument-hint: "[x]"\n---\n# C'
+  assert.equal(frontmatterDescription(plain), 'One line.')
+  assert.equal(frontmatterDescription(folded), 'Two lines.')
+  assert.equal(frontmatterDescription(literal), 'Literal block, second line.')
+  assert.equal(frontmatterDescription('# no frontmatter'), '')
 })

@@ -71,12 +71,16 @@ COPY --from=server-build /build/server/node_modules /opt/hyperframes-startos/ser
 COPY --from=server-build /build/server/package.json /opt/hyperframes-startos/server/package.json
 
 # Skills library: the upstream skills at the pinned version, this package's
-# own skills, and the community skills that fit server work (the pinned
+# own skills, the community skills that fit server work (the pinned
 # community-skills submodule; the two that film an agent's own chat history
-# are left out). Served by the API (/skills) and as MCP resources.
+# are left out), and HeyGen's avatar/video/translate skills (vendored in
+# heygen-skills/, see its README). Served by the API (/skills) and as MCP
+# resources.
 COPY hyperframes/skills /opt/hyperframes/skills
 COPY skills /opt/hyperframes-startos/skills
 COPY hyperframes/LICENSE /opt/hyperframes/LICENSE
+COPY heygen-skills/skills /opt/heygen-skills/skills
+COPY heygen-skills/LICENSE /opt/heygen-skills/LICENSE
 COPY community-skills/skills/vox-explainer /opt/hyperframes-community/skills/vox-explainer
 COPY community-skills/skills/camera-3d-captions /opt/hyperframes-community/skills/camera-3d-captions
 COPY community-skills/skills/duo /opt/hyperframes-community/skills/duo
@@ -95,8 +99,8 @@ RUN node /opt/hyperframes-startos/studio-mobile/patch-studio.mjs \
 COPY assets/hf-studio assets/hf-server /usr/local/bin/
 RUN chmod +x /usr/local/bin/hf-studio /usr/local/bin/hf-server
 
-ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills:/opt/hyperframes-community/skills
-ENV HF_SERVER_VERSION=0.2.0
+ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills:/opt/hyperframes-community/skills:/opt/heygen-skills/skills
+ENV HF_SERVER_VERSION=0.2.1
 ENV HOME=/data/home
 ENV HYPERFRAMES_PROJECTS_DIR=/data/projects
 ENV HF_STATE_DIR=/data/startos
