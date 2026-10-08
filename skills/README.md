@@ -62,7 +62,7 @@ On this server the upstream skills' shell commands become tool calls. `/hyperfra
 
 ## Community skills (served from the service, run on your machine)
 
-Six skills from [heygen-com/hyperframes-community-skills](https://github.com/heygen-com/hyperframes-community-skills) (pinned in the `community-skills/` submodule) are served as a third tree. Upstream's caution applies: they are not curated, and a skill can run commands or call network services, so read a skill's `SKILL.md` and scripts before you follow it. Their scripts (Node, Python, Puppeteer, FFmpeg) run on the agent's own machine; this server runs only `hyperframes` commands. Build locally, then bring the project here with `import_project` from your own repository, `upload`, or `write_file`, and lint, check, review and render on the server.
+Eight skills from [heygen-com/hyperframes-community-skills](https://github.com/heygen-com/hyperframes-community-skills) (pinned in the `community-skills/` submodule) are served as a third tree. Upstream's caution applies: they are not curated, and a skill can run commands or call network services, so read a skill's `SKILL.md` and scripts before you follow it. Their scripts (Node, Python, Puppeteer, FFmpeg) run on the agent's own machine; this server runs only `hyperframes` commands. Build locally, then bring the project here with `import_project` from your own repository, `upload`, or `write_file`, and lint, check, review and render on the server.
 
 | Skill                  | Use for                                                        | Runs on the agent's machine                              | Comes to the server as            |
 | ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------- |
@@ -72,8 +72,10 @@ Six skills from [heygen-com/hyperframes-community-skills](https://github.com/hey
 | `/p5-paint-animation`  | Handwriting, paint-on and living-painting animations           | Node, Puppeteer with Chrome, p5, FFmpeg (about 500 MB)   | rendered frames or clips via `upload` |
 | `/prod-by-claude`      | Strudel live-coding music videos                               | Puppeteer, Chrome for Testing, a 5–7 min recording       | the generated project via `upload` |
 | `/x-posting-license`   | Animated "posting license" card for an X profile               | Node; calls `api.fxtwitter.com`                          | the generated project via `upload` |
+| `/day-in-my-life` | Ink animation of an approved real work session; internal/personal only | Writable private job copy, Node/Puppeteer, compatible Python/NumPy/SciPy, FFmpeg | private local film; no private-history upload |
+| `/session-story` | Watercolour work-session film from approved real receipts; internal/personal only | Writable private job copy, Node/Python, FFmpeg; Linux: FluidSynth + licensed soundfont | private local film; no private-history upload |
 
-Not served: `day-in-my-life` and `session-story`. They film the agent's own chat history from `~/.claude`; upstream says they are not for marketing or anyone else's content.
+These two are newly served, with source-consent and pre-preview approval gates. Neither harvester supports Hermes natively, and upstream validators are not privacy enforcement. Do not automatically read chat history, memory or instruction files. Keep upstream's no-marketing restriction. `community-adaptations/README.md` documents the exact overlays and shared execution rules: fresh writable per-job copies (some helpers delete shared engine frames), compatible isolated Python, reviewed JavaScript, explicit outbound dependencies and no assumed Linux render parity. All original scripts/assets/references stay unchanged.
 
 Install a community skill on a local agent with `npx skills add heygen-com/hyperframes-community-skills --skill <name>`.
 

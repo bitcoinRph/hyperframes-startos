@@ -10,5 +10,6 @@ server/dist/**
 !hyperframes/LICENSE
 !community-skills/skills/**
 !community-skills/LICENSE
+!community-adaptations/*.SKILL.md
 !heygen-skills/skills/**
 !heygen-skills/LICENSE

@@ -11,8 +11,9 @@
 - **Studio**, the HyperFrames browser editor: preview a project, click elements to edit them, trim clips on the timeline, and export video. It shows one project at a time.
 - **Agent API**, an authenticated REST API your AI agents use to create projects, write compositions, lint and check them, capture frames and render video on this server.
 - **MCP Server**, the same capabilities as a Model Context Protocol endpoint for Claude Code, Codex, Hermes Agent, OpenClaw and other MCP clients.
-- A **skills library** served from the service, including the matching HyperFrames skills, StartOS connection and production guides, six community skills, and HeyGen's avatar, video and translation skills. The HeyGen skills use a separately authorized HeyGen account from the agent's machine; those hosted jobs do not run on your StartOS server.
+- A **skills library** served from the service, including the matching HyperFrames skills, StartOS connection and production guides, eight community skills, and HeyGen's avatar, video and translation skills. The HeyGen skills use a separately authorized HeyGen account from the agent's machine; those hosted jobs do not run on your StartOS server.
 - Your projects and finished renders live in the service's data and are included in backups.
+- Two community skills make private work-session films (`day-in-my-life`, `session-story`). They run locally on the agent host from explicitly approved sources, not by automatically reading your chat history. Their instructions require owner review before preview or render; they are not for marketing or client history.
 
 ## Getting set up
 
