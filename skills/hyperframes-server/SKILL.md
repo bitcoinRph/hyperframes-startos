@@ -76,11 +76,12 @@ arguments verbatim, no shell; add `--json` where the command supports it.
 | `node <skill>/scripts/*.mjs`, `python3 scripts/*.py` (community skills) | Not on the server. Run them where you run; bring the result here with `import_project`, `upload` or `write_file`. See `skills/README.md`, Community skills. |
 | `hyperframes render ...`                           | `render_video` → job id → `get_render_status` (`POST /projects/<p>/renders`)           |
 | `hyperframes preview`                              | `studio_open` + `studio_status`; give the user the project URL                         |
-| `hyperframes keyframes`, `beats`, `compositions`, `history`, `media-treatment`, `normalize-audio`, `compare`, `grade-compare` | `run_cli` with the same arguments |
+| `hyperframes keyframes`, `audio`, `beats`, `compositions`, `history`, `media-treatment`, `normalize-audio`, `compare`, `grade-compare` | `run_cli` with the same arguments (`audio` measures locally; no hosted provider here) |
 | `hyperframes tts`, `transcribe`, `remove-background`, `media-use resolve`, `capture <url>` | `run_cli`; needs the optional tools or provider keys, check `doctor` first |
 | `hyperframes publish`, `cloud`, `lambda`, `cloudrun`, `auth`, `feedback`, `telemetry` | Not available on the server, by design. Download the render instead. |
 | `hyperframes render --docker`                      | Not available (the service is already the container). Omit `--docker`.                |
 | `hyperframes skills update ...`                    | Not needed: the server serves the skills that match its CLI version. Use `read_skill`. |
+| `hyperframes catch-up`                             | Not available: it syncs with the desktop app, which this server does not run.          |
 
 Run the CLI from the project: `run_cli` with `project` set runs in that directory, so
 relative paths in arguments resolve against the project.
