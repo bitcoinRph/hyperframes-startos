@@ -30,14 +30,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # One pinned static FFmpeg build (BtbN n8.0.1, per arch) instead of Debian's apt
 # ffmpeg, the same pin as upstream's Dockerfile.render, so renders here match
 # upstream's regression baselines. Bump the URLs and sha256s together.
+# The arch comes from dpkg, not TARGETARCH: `start-cli s9pk pack --arch` builds
+# natively without --platform, so TARGETARCH keeps its amd64 default on arm64.
 ARG FFMPEG_RELEASE=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-02-28-12-59
 ARG FFMPEG_BUILD=ffmpeg-n8.0.1-66-g27b8d1a017
 ARG FFMPEG_SHA256_AMD64=26d2ecd0cefba99f9d1ea92252a3a4f743a58df4c1c3cf9f8bbaaa40b1fca5b0
 ARG FFMPEG_SHA256_ARM64=d72cc324cb65dd92a9ffe699cc95ccbacfef4def8d3ad9fe2b5164a6a71b9595
-RUN case "$TARGETARCH" in \
+RUN FF_DEB_ARCH="$(dpkg --print-architecture)" \
+    && case "$FF_DEB_ARCH" in \
       amd64) FF_ARCH=linux64; FF_SHA256="$FFMPEG_SHA256_AMD64" ;; \
       arm64) FF_ARCH=linuxarm64; FF_SHA256="$FFMPEG_SHA256_ARM64" ;; \
-      *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; \
+      *) echo "unsupported architecture '$FF_DEB_ARCH'" >&2; exit 1 ;; \
     esac \
     && curl -fsSL -o /tmp/ffmpeg.tar.xz "$FFMPEG_RELEASE/$FFMPEG_BUILD-$FF_ARCH-gpl-8.0.tar.xz" \
     && echo "$FF_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c - \
