@@ -127,8 +127,8 @@ export function parseJsonOutput(stdout: string): unknown {
 
 /**
  * Subcommands `run_cli` may invoke. Everything that opens a browser, talks to
- * a hosted account, publishes, or reports telemetry is left out; those have no
- * place behind an agent API on a server.
+ * a hosted account, publishes, reports telemetry or syncs with the desktop app
+ * (`catch-up`) is left out; those have no place behind an agent API on a server.
  */
 export const allowedCliCommands = new Set([
   'lint',
@@ -141,6 +141,10 @@ export const allowedCliCommands = new Set([
   'catalog',
   'add',
   'beats',
+  // Local signal analysis. The hosted provider (HYPERFRAMES_AUDIO_API_URL +
+  // HYPERFRAMES_AUDIO_API_KEY) and Beat This! (a configured Python) are
+  // unavailable in this image, so `audio` reads the file and never uploads it.
+  'audio',
   'normalize-audio',
   'media-treatment',
   'media-use',

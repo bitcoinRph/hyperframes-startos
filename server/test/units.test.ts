@@ -47,7 +47,8 @@ test('render args are validated and quoted-free', () => {
 
 test('run_cli allowlist blocks hosted and interactive commands', () => {
   assertAllowedCli(['timeline', '--json'])
-  for (const cmd of ['publish', 'cloud', 'auth', 'preview', 'init', 'feedback', 'telemetry']) {
+  assertAllowedCli(['audio', '--json'])
+  for (const cmd of ['publish', 'cloud', 'auth', 'preview', 'init', 'feedback', 'telemetry', 'catch-up']) {
     assert.throws(() => assertAllowedCli([cmd]), /not available/)
   }
   assert.throws(() => assertAllowedCli(['render', '--docker']), /--docker/)
