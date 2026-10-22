@@ -1,12 +1,20 @@
 name: Build
 
-# Pull-request build: proves the Docker image and the .s9pk build for both
-# architectures. The packages are about 650 MB each, so the artifact upload
-# is best effort: a full Actions artifact storage quota must not turn a
-# good build red. Releases never depend on artifacts (see tagAndRelease.yml).
+# Pull requests (including forks) are read-only native build checks.
+# Premerge package delivery uses exact-head reviewed manual directRelease.yml
+# RC dispatch, never privileged PR execution or the Actions artifact service.
 
 on:
   workflow_dispatch:
+    inputs:
+      deliver_assets:
+        description: Build verified native RC assets directly to a private draft
+        type: boolean
+        default: false
+      expected_sha:
+        description: Full reviewed branch HEAD, required for RC delivery
+        type: string
+        default: ''
   pull_request:
     paths-ignore: ['*.md']
     branches: ['main']
@@ -21,6 +29,7 @@ jobs:
   # npm audit is informational: its findings sit in the SDK's build-time lint
   # tooling, which is not part of the image (see README.md, Development).
   checks:
+    if: github.event_name != 'workflow_dispatch' || !inputs.deliver_assets
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,6 +38,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -41,6 +51,7 @@ jobs:
           npm run check
           node node_modules/@start9labs/start-sdk/lint.mjs
           npx prettier --check startos
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
         shell: bash
 
       - name: Agent API and MCP server (typecheck, tests, audit)
@@ -77,6 +88,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          persist-credentials: false
 
       # A PR build does not publish, so a throwaway key is fine.
       - name: Provision a workspace signing key
@@ -96,15 +108,16 @@ jobs:
           make ${{ matrix.target }}
           echo ""
           echo "SHA256SUMs:"
-          sha256sum *.s9pk
+          sha256sum ./*.s9pk
         shell: bash
 
-      - name: Upload the s9pk as an artifact (best effort)
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: hyperframes_${{ matrix.target }}
-          path: ./*.s9pk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
+  # This existing workflow ID enables premerge dispatch before the newly added
+  # reusable workflow exists on default main. It never runs for PR events.
+  deliver_rc:
+    if: github.event_name == 'workflow_dispatch' && inputs.deliver_assets && github.repository == 'bitcoinRph/hyperframes-startos'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/directRelease.yml
+    with:
+      mode: rc
+      expected_sha: ${{ inputs.expected_sha }}

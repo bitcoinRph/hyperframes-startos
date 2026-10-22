@@ -1,136 +1,19 @@
 name: Release
 
-# Manual path: pushing a `v<upstream>_<downstream>` tag by hand builds the
-# .s9pk files and creates or updates the GitHub release for that tag, with
-# the same per-architecture jobs as Tag and Release. Tags pushed by that
-# workflow do not trigger this one (GitHub does not chain workflows started
-# with GITHUB_TOKEN); it attaches the packages itself.
-
 on:
   push:
-    tags:
-      - 'v*.*'
+    tags: ['v*.*']
 
+# Shared gate: drafts first, both native QA bundles before publication.
+permissions:
+  contents: read
 jobs:
-  # Fast gates, before any image is built: a release never ships code that
-  # fails typecheck, lint, formatting or the server's unit tests. The root
-  # npm audit is informational: its findings sit in the SDK's build-time lint
-  # tooling, which is not part of the image (see README.md, Development).
-  checks:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: StartOS package (typecheck, SDK lint, prettier)
-        run: |
-          npm ci
-          npm run check
-          node node_modules/@start9labs/start-sdk/lint.mjs
-          npx prettier --check startos
-        shell: bash
-
-      - name: Agent API and MCP server (typecheck, tests, audit)
-        working-directory: server
-        run: |
-          npm ci
-          npm run check
-          npm test
-          npm audit --audit-level=high
-        shell: bash
-
-      - name: Root npm audit (informational)
-        continue-on-error: true
-        run: npm audit --audit-level=high
-        shell: bash
-
-  create:
-    needs: checks
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      version: ${{ steps.extract.outputs.version }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Extract package ID and version
-        id: extract
-        uses: Start9Labs/start-technologies/.github/actions/extract-version@master
-
-      - name: Create the GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ steps.extract.outputs.version }}
-          generate_release_notes: true
-          body: |
-            HyperFrames ${{ steps.extract.outputs.version }} for StartOS. Sideload the `.s9pk` for your server's architecture (`x86_64` or `aarch64`). SHA256 sums are in the `SHA256SUMS-*.txt` files. Release notes as shown in StartOS are in `startos/versions/current.ts`.
-
   release:
-    needs: create
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { target: x86, runner: ubuntu-latest }
-          - { target: arm, runner: ubuntu-24.04-arm }
-    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
-    steps:
-      - name: Setup build environment
-        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
-
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      # A DEV_KEY secret gives every release the same signing identity. Without
-      # one, a fresh key is generated here so the release still goes out.
-      - name: Provision the signing key
-        env:
-          DEV_KEY: ${{ secrets.DEV_KEY }}
-        run: |
-          mkdir -p ~/.startos .startos
-          if [ -n "$DEV_KEY" ]; then
-            printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
-            echo "Signing with the DEV_KEY secret."
-          else
-            start-cli init-key
-            echo "::warning::No DEV_KEY secret: this release is signed with a key generated for this run."
-          fi
-          cp ~/.startos/id.key.pem .startos/build.key.pem
-        shell: bash
-
-      - name: Install package dependencies
-        run: npm ci
-        shell: bash
-
-      - name: Build (make ${{ matrix.target }})
-        run: |
-          start-cli s9pk init-workspace ..
-          make ${{ matrix.target }}
-          echo ""
-          echo "SHA256SUMs:"
-          sha256sum *.s9pk | tee "SHA256SUMS-${{ matrix.target }}.txt"
-        shell: bash
-
-      - name: Attach the package to the GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            ./*.s9pk
-            ./SHA256SUMS-${{ matrix.target }}.txt
+    uses: ./.github/workflows/directRelease.yml
+    with:
+      mode: stable
+      expected_sha: ${{ github.sha }}
+    secrets:
+      DEV_KEY: ${{ secrets.DEV_KEY }}

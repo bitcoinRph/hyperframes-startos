@@ -1,0 +1,189 @@
+name: Direct Release Assets
+
+# No Actions artifact service is involved. RCs stay private drafts; stable
+# publication is a separate final gate after both native bundles read back.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed 40-character branch HEAD (fail closed if moved)
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      expected_sha:
+        required: true
+        type: string
+    secrets:
+      DEV_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-release-${{ inputs.mode || 'rc' }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    # Never privileged pull_request_target or fork checkout. Manual RC dispatch
+    # requires repository write access; automatic stable callers use main/tags.
+    if: github.repository == 'bitcoinRph/hyperframes-startos' && github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.identity.outputs.sha }}
+      version: ${{ steps.identity.outputs.version }}
+      mode: ${{ steps.identity.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Bind source and release channel
+        id: identity
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_MODE: ${{ inputs.mode || 'rc' }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert re.fullmatch(r'[0-9a-f]{40}', os.environ['EXPECTED_SHA'])
+          assert sha == os.environ['EXPECTED_SHA'] == os.environ['GITHUB_SHA'], 'reviewed HEAD changed'
+          version = re.search(r"version: '([0-9]+\.[0-9]+\.[0-9]+:[0-9]+)'", pathlib.Path('startos/versions/current.ts').read_text())[1]
+          mode = os.environ['RELEASE_MODE']
+          assert mode in ('rc', 'stable')
+          if mode == 'stable':
+              assert os.environ['GITHUB_REF'] in ('refs/heads/main', 'refs/tags/v' + version.replace(':', '_'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'sha={sha}\nversion={version}\nmode={mode}\n')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Package checks and direct-delivery regressions
+        run: |
+          npm ci
+          npm run check
+          node node_modules/@start9labs/start-sdk/lint.mjs
+          npx prettier --check startos
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Agent API and MCP server checks
+        working-directory: server
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm audit --audit-level=high
+      - name: Root npm audit (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  prepare:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.prepare.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+          persist-credentials: false
+      - name: Prepare immutable SHA-bound draft by ID
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          VERSION: ${{ needs.checks.outputs.version }}
+          MODE: ${{ needs.checks.outputs.mode }}
+        run: |
+          id=$(python3 .github/scripts/direct-release.py prepare --sha "$SHA" --version "$VERSION" --mode "$MODE")
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
+  native:
+    needs: [checks, prepare]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86, arch: x86_64, runner: ubuntu-latest }
+          - { target: arm, arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    # GitHub scopes tokens by job, not step. Exposed as GH_TOKEN only to the
+    # uploader after QA; checkout does not persist it. No fork/PR job runs here.
+    permissions:
+      contents: write
+    steps:
+      - uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Provision package signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+          MODE: ${{ needs.checks.outputs.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.startos .startos
+          if [ -n "$DEV_KEY" ]; then
+            printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+            chmod 600 ~/.startos/id.key.pem
+          elif [ "$MODE" = stable ]; then
+            echo 'Stable publication requires the existing DEV_KEY identity; no random signer fallback.' >&2
+            exit 1
+          else
+            start-cli init-key
+          fi
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+      - name: Build native package
+        run: |
+          npm ci
+          start-cli s9pk init-workspace ..
+          make ${{ matrix.target }}
+      - name: Verify actual packed native runtime and source
+        env:
+          SHA: ${{ needs.checks.outputs.sha }}
+          VERSION: ${{ needs.checks.outputs.version }}
+        run: |
+          command -v unsquashfs >/dev/null || { sudo apt-get update && sudo apt-get install -y squashfs-tools; }
+          python3 .github/scripts/native-package-qa.py --arch '${{ matrix.arch }}' --expected-sha "$SHA" --expected-version "$VERSION" --output-dir 'release-artifacts/${{ matrix.arch }}'
+      - name: Upload verified bytes directly from this runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          VERSION: ${{ needs.checks.outputs.version }}
+          MODE: ${{ needs.checks.outputs.mode }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          python3 .github/scripts/direct-release.py upload --sha "$SHA" --version "$VERSION" --mode "$MODE" --release-id "$RELEASE_ID" --arch '${{ matrix.arch }}' --directory 'release-artifacts/${{ matrix.arch }}'
+
+  finalize:
+    needs: [checks, prepare, native]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+          persist-credentials: false
+      - name: Read back both bundles before stable publication (RC stays draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          VERSION: ${{ needs.checks.outputs.version }}
+          MODE: ${{ needs.checks.outputs.mode }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          python3 .github/scripts/direct-release.py finalize --sha "$SHA" --version "$VERSION" --mode "$MODE" --release-id "$RELEASE_ID"
+          echo "Verified $MODE release ID $RELEASE_ID at $SHA" >> "$GITHUB_STEP_SUMMARY"
