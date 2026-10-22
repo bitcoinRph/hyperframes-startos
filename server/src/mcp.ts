@@ -248,7 +248,7 @@ export function createMcpServer(): McpServer {
     {
       title: 'Browser check',
       description:
-        'The browser gate (`hyperframes check --json`): lint, runtime errors, layout, motion assertions and WCAG contrast in one headless Chrome pass. Pass snapshots=true to also save audited frames under snapshots/.',
+        'The browser gate (`hyperframes check --json`): lint, runtime, layout, motion, WCAG contrast and craft findings. range scopes runtime sampling; components filters findings without changing full-check status. snapshots=true saves audited frames under .hyperframes/artifacts/snapshots/.',
       inputSchema: {
         project,
         snapshots: z.boolean().optional(),
@@ -257,6 +257,11 @@ export function createMcpServer(): McpServer {
         strict: z.boolean().optional().describe('Warnings fail too'),
         contrast: z.boolean().optional().describe('false skips the WCAG pass'),
         atTransitions: z.boolean().optional(),
+        range: z.tuple([z.number(), z.number()]).optional().describe('Runtime interval [start, end]; static lint stays project-wide'),
+        components: z.string().max(500).optional().describe('CSS selector list filters findings, not full-check status'),
+        maxTransitionSamples: z.number().int().min(1).max(10000).optional(),
+        maxIssues: z.number().int().min(1).max(1000).optional(),
+        collapseStatic: z.boolean().optional(),
       },
       annotations: { readOnlyHint: true },
     },
@@ -268,12 +273,15 @@ export function createMcpServer(): McpServer {
     {
       title: 'Capture frames',
       description:
-        'Capture PNG frames at given times (or N evenly spaced frames) so you can look at the composition. Up to three images are returned inline; all are saved under snapshots/ in the project.',
+        'Capture PNG frames, or review=true for beat stills, seam strips and phone sheets. Returns upstream JSON times and review metadata plus project files. Up to three PNGs are inline. Local only: Gemini descriptions are disabled.',
       inputSchema: {
         project,
         at: z.array(z.number()).optional().describe('Timestamps in seconds'),
         frames: z.number().int().optional().describe('Evenly spaced frames instead of `at` (default 5)'),
         zoom: z.string().optional().describe('CSS selector or x,y,w,h crop'),
+        review: z.boolean().optional().describe('Scene/beat stills, seam strips and phone sheets; incompatible with at, range or zoom'),
+        range: z.tuple([z.number(), z.number()]).optional().describe('Root-timeline interval [start, end]'),
+        composition: z.string().max(500).optional().describe('data-composition-id, not a file path'),
         end: z.boolean().optional().describe('false drops the automatic end-of-timeline frame'),
         inlineImages: z.number().int().min(0).max(6).optional().describe('How many PNGs to return inline (default 3)'),
       },

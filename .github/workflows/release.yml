@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -118,6 +120,7 @@ jobs:
 
       - name: Build (make ${{ matrix.target }})
         run: |
+          start-cli s9pk init-workspace ..
           make ${{ matrix.target }}
           echo ""
           echo "SHA256SUMs:"

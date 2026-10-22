@@ -33,8 +33,14 @@ Releases are tagged `v<version>` and documented in `hyperframes/releases/v<versi
 7. Community skills: `git -C community-skills fetch --depth 1 origin && git -C community-skills checkout origin/master`; read the diff of every copied skill's `SKILL.md` and scripts before moving the pin (they run on agent machines, and upstream warns they are not curated). All eight are copied once from the complete tree. Review additions/removals, update the routing table and exact inventory assertion in `server/test/skills-library.test.ts`, and regenerate the two SKILL.md overlays per `community-adaptations/README.md`. Preserve the declared deployment section and do not change creative assets or scripts without separate review.
 8. HeyGen skills (`heygen-skills/`, a vendored copy, not a submodule): follow "Refreshing the copy" in `heygen-skills/README.md` and re-apply the edits listed there.
 9. Run `npm run check`, then in `server/`: `npm ci && npm run check && npm test`.
-10. Build and install on a StartOS box; create a project, lint, check, snapshot and render through the API; open Studio.
-11. Merge to `main`. The Tag and Release workflow tags `v<version>` and publishes the `.s9pk` files as a GitHub release (see `README.md`, Releases). A `DEV_KEY` secret is optional; see `README.md`, Releases.
+10. Run the application production build and a disposable local create/lint/check/snapshot/render smoke. Build both `.s9pk` architectures through reviewed PR CI. Live installation requires independent artifact QA and a verified complete backup; do not install or restart merely to finish source review.
+11. After independent code and artifact QA, merge to `main`. The Tag and Release workflow tags `v<version>` and publishes the `.s9pk` files as a GitHub release (see `README.md`, Releases). A `DEV_KEY` secret is optional; see `README.md`, Releases.
+
+## HeyGen CLI dependency
+
+`assets/install-heygen.sh` pins official `heygen-com/heygen-cli` v0.10.0 static release archives for Linux amd64 and arm64. Refresh the version, both SHA-256 hashes and the Docker version assertion together. Compare the CDN stable pointer with the GitHub stable release, compare both downloaded archive digests with GitHub asset `digest` and official `checksums.txt`, inspect source/release changes and preserve LICENSE/README/NOTICE. Never use the upstream pipe-to-shell installer or run `heygen update` in a released image.
+
+Run the Docker contract tests with `cd server && npm test`. For an isolated real-binary REST/MCP check, run `HF_TOOLING_CLI=<absolute reviewed hyperframes binary> HF_TOOLING_HEYGEN=<absolute reviewed heygen binary> node --test --import tsx test/tooling-contract.test.ts` from `server/`. This opt-in test uses an empty scratch HOME, removes provider settings, omits curl from child PATH (doctor's optional CDN probe cannot execute), and checks actual binary discovery/version plus the honest unauthenticated row. It performs no login, generation or model downloads. Both native architecture image builds must also pass their build-time `--version`/`--help` checks; a verified arm64 archive alone is not native execution evidence.
 
 ## Wrapper-only changes
 

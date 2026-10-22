@@ -1,5 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { parseArgs } from 'node:util'
 import { config } from './config.js'
 import { projectJson, requireProject } from './projects.js'
 import { assertAllowedCli, parseJsonOutput, runCli } from './util/cli.js'
@@ -22,9 +23,14 @@ export type CheckOptions = {
   strict?: boolean
   contrast?: boolean
   atTransitions?: boolean
+  range?: [number, number]
+  components?: string
+  maxTransitionSamples?: number
+  maxIssues?: number
+  collapseStatic?: boolean
 }
 
-export async function checkProject(project: string, options: CheckOptions = {}): Promise<unknown> {
+export function checkArgs(options: CheckOptions = {}): string[] {
   const args = ['check']
   if (options.snapshots) args.push('--snapshots')
   if (options.at?.length) args.push('--at', options.at.map(numArg).join(','))
@@ -32,7 +38,16 @@ export async function checkProject(project: string, options: CheckOptions = {}):
   if (options.strict) args.push('--strict')
   if (options.contrast === false) args.push('--no-contrast')
   if (options.atTransitions) args.push('--at-transitions')
-  return projectJson(project, args, 10 * 60_000)
+  if (options.range !== undefined) args.push('--range', rangeArg(options.range))
+  if (options.components !== undefined) args.push('--components', textArg(options.components, 'components'))
+  if (options.maxTransitionSamples !== undefined) args.push('--max-transition-samples', String(intArg(options.maxTransitionSamples, 1, 10000)))
+  if (options.maxIssues !== undefined) args.push('--max-issues', String(intArg(options.maxIssues, 1, 1000)))
+  if (options.collapseStatic === false) args.push('--no-collapse-static')
+  return args
+}
+
+export async function checkProject(project: string, options: CheckOptions = {}): Promise<unknown> {
+  return projectJson(project, checkArgs(options), 10 * 60_000)
 }
 
 export type SnapshotOptions = {
@@ -40,31 +55,30 @@ export type SnapshotOptions = {
   frames?: number
   zoom?: string
   end?: boolean
+  /** Explicit opt-in to Gemini descriptions; dedicated REST/MCP tools force false. */
   describe?: boolean
+  review?: boolean
+  range?: [number, number]
+  /** data-composition-id (not a filename). */
+  composition?: string
 }
 
 export type SnapshotResult = {
   outputDir: string
   files: { path: string; size: number }[]
   stdout: string
+  /** Upstream JSON frame times, contact sheets and optional review plan. */
+  json: unknown
 }
 
 export async function snapshotProject(project: string, options: SnapshotOptions = {}): Promise<SnapshotResult> {
   const dir = await requireProject(project)
   const relOut = `snapshots/${new Date().toISOString().replace(/[:.]/g, '-')}`
   const outDir = await resolveInside(dir, relOut)
-  const args = ['snapshot', dir, '--output', outDir]
-  if (options.at?.length) args.push('--at', options.at.map(numArg).join(','))
-  else if (options.frames !== undefined) args.push('--frames', String(intArg(options.frames, 1, 60)))
-  if (options.zoom) {
-    if (options.zoom.length > 200 || options.zoom.includes('\0')) throw badRequest('zoom is too long')
-    args.push('--zoom', options.zoom)
-  }
-  if (options.end === false) args.push('--no-end')
-  if (options.describe === false) args.push('--describe', 'false')
+  const args = snapshotArgs(dir, outDir, options)
   const result = await runCli(args, { cwd: dir, timeoutMs: 10 * 60_000 })
   const names = await readdir(outDir).catch(() => [])
-  if (result.exitCode !== 0 && names.length === 0) {
+  if (result.exitCode !== 0) {
     throw new ApiError(500, 'hyperframes snapshot failed', {
       exitCode: result.exitCode,
       stderr: result.stderr.slice(-4000),
@@ -76,7 +90,30 @@ export async function snapshotProject(project: string, options: SnapshotOptions 
     const s = await stat(join(outDir, n)).catch(() => null)
     if (s?.isFile()) files.push({ path: `${relOut}/${n}`, size: s.size })
   }
-  return { outputDir: relOut, files, stdout: result.stdout.slice(-4000) }
+  return { outputDir: relOut, files, stdout: result.stdout.slice(-4000), json: parseJsonOutput(result.stdout) }
+}
+
+export function snapshotArgs(dir: string, outDir: string, options: SnapshotOptions = {}): string[] {
+  if ([options.at !== undefined, options.range !== undefined, options.composition !== undefined].filter(Boolean).length > 1) {
+    throw badRequest('use only one of at, range or composition')
+  }
+  if (options.review && (options.at !== undefined || options.range !== undefined || options.zoom !== undefined)) {
+    throw badRequest('review picks its own frames; omit at, range and zoom')
+  }
+  const args = ['snapshot', dir, '--output', outDir, '--json']
+  if (options.review) args.push('--review')
+  if (options.range !== undefined) args.push('--range', rangeArg(options.range))
+  if (options.composition !== undefined) args.push('--composition', textArg(options.composition, 'composition'))
+  if (options.at?.length) args.push('--at', options.at.map(numArg).join(','))
+  else if (options.frames !== undefined) args.push('--frames', String(intArg(options.frames, 1, 60)))
+  if (options.zoom) {
+    if (options.zoom.length > 200 || options.zoom.includes('\0')) throw badRequest('zoom is too long')
+    args.push('--zoom', options.zoom)
+  }
+  if (options.end === false) args.push('--no-end')
+  // A configured Gemini key must never silently turn a local screenshot into an upload.
+  if (options.describe !== true) args.push('--describe', 'false')
+  return args
 }
 
 export async function readSnapshotPng(project: string, path: string): Promise<Buffer> {
@@ -158,9 +195,44 @@ export type CliRunResult = {
   json: unknown
 }
 
+// Snapshot's describe is a string, not a boolean: any non-"false" value uploads.
+// Match citty 0.2.2's node:util parser string operands, including output's alias.
+const snapshotStringOptions = Object.fromEntries(
+  ['output', 'o', 'frames', 'at', 'range', 'composition', 'timeout', 'angle', 'zoom', 'zoom-scale', 'zoomScale', 'against', 'describe']
+    .map(name => [name, { type: 'string' as const, ...(name === 'output' ? { short: 'o' } : {}) }]),
+)
+
+function snapshotConsentArgs(args: string[]): string[] {
+  let describe: string | undefined
+  const normalized = [args[0]]
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i]
+    // Terminators and negated spellings make lexical consent ambiguous.
+    if (arg === '--' || arg === '--no-describe' || arg.startsWith('--no-describe=')) {
+      throw badRequest('snapshot requires an unambiguous --describe value; omit it for local-only snapshots')
+    }
+    if (arg === '--describe' || arg.startsWith('--describe=')) {
+      if (describe !== undefined) throw badRequest('duplicate --describe is not allowed')
+      const value = arg === '--describe' ? args[++i] : arg.slice('--describe='.length)
+      if (!value?.trim() || value.startsWith('-')) throw badRequest('--describe requires false, true or a custom question')
+      describe = value
+    } else normalized.push(arg)
+  }
+  const value = describe ?? 'false'
+  // Validate the original explicit operand too: a preceding string option may
+  // swallow --describe, which must not be mistaken for intentional consent.
+  const parsed = parseArgs({ args: args.slice(1).filter(arg => !arg.startsWith('--no-')), options: snapshotStringOptions, strict: false, allowPositionals: true })
+  if (describe !== undefined && parsed.values.describe !== describe) throw badRequest('ambiguous --describe operand')
+  normalized.push('--describe', value)
+  const forwarded = parseArgs({ args: normalized.slice(1).filter(arg => !arg.startsWith('--no-')), options: snapshotStringOptions, strict: false, allowPositionals: true })
+  if (forwarded.values.describe !== value) throw badRequest('snapshot arguments swallow the required --describe operand')
+  return normalized
+}
+
 export async function runAllowedCli(project: string | undefined, args: string[], timeoutMs?: number): Promise<CliRunResult> {
   try {
     assertAllowedCli(args)
+    if (args[0] === 'snapshot') args = snapshotConsentArgs(args)
   } catch (err) {
     throw badRequest(err instanceof Error ? err.message : String(err))
   }
@@ -207,6 +279,18 @@ export function serverInfo() {
       upstream: 'https://hyperframes.heygen.com/introduction',
     },
   }
+}
+
+function textArg(value: string, name: string): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > 500 || value.includes('\0')) throw badRequest(`${name} must be a non-empty string up to 500 characters`)
+  return value
+}
+
+function rangeArg(value: [number, number]): string {
+  if (!Array.isArray(value) || value.length !== 2) throw badRequest('range must be [start, end] in seconds')
+  const parts = value.map(numArg)
+  if (value[0] >= value[1]) throw badRequest('range start must be less than end')
+  return parts.join(',')
 }
 
 function numArg(n: number): string {

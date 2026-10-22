@@ -2,7 +2,7 @@
 
 Ready-made skills for AI agents that make video with this HyperFrames server. Two sets live here (the community and HeyGen trees below come from their own directories):
 
-1. **Upstream HyperFrames skills** (21). They are the official skills from [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) at the version this package wraps. They are in the `hyperframes/skills/` submodule of this repository, and the service serves the same files at `/skills/<name>/` and as MCP resources (`hyperframes://skills/<name>/SKILL.md`). Do not copy them into this directory. Update them by moving the submodule (see `UPDATING.md`).
+1. **Upstream HyperFrames skills** (7). They are the official skills from [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) at the version this package wraps. They are in the `hyperframes/skills/` submodule of this repository, and the service serves the same files at `/skills/<name>/` and as MCP resources (`hyperframes://skills/<name>/SKILL.md`). Do not copy them into this directory. Update them by moving the submodule (see `UPDATING.md`).
 2. **StartOS skills** (this directory). They teach an agent how to use the upstream skills **through this server**, where the agent has no local shell on the machine that renders.
 
 Install into a local agent with the skills CLI, or point the agent at the served copies:
@@ -27,38 +27,19 @@ curl -H "Authorization: Bearer $HF_API_KEY" https://<api-address>/skills/hyperfr
 
 ## Upstream skills (served from the service)
 
-Routing and workflows:
+Upstream 0.8.185 consolidated 21 standalone skills into **seven** complete trees. Removed slugs are not served from older releases.
 
-| Skill                      | Use when                                                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `/hyperframes`             | Read first for any request to make, edit, animate or render a video; the intent layer and the router to the workflows below. |
-| `/product-launch-video`    | A website or product → launch, promo, site tour, up to about 3 minutes.                                                      |
-| `/faceless-explainer`      | Arbitrary text → an explainer with invented visuals.                                                                         |
-| `/pr-to-video`             | A GitHub pull request → a code-change explainer.                                                                             |
-| `/embedded-captions`       | Captions on existing talking-head footage.                                                                                   |
-| `/talking-head-recut`      | Designed graphic overlays on existing talking-head footage.                                                                  |
-| `/motion-graphics`         | A short, unnarrated motion graphic (kinetic type, stat hit, logo sting, lower third).                                        |
-| `/music-to-video`          | A music track → a beat-synced video.                                                                                         |
-| `/slideshow`               | A presentation or interactive deck (a navigable page, not a rendered video).                                                 |
-| `/general-video`           | Anything else, and companion mode.                                                                                           |
-| `/remotion-to-hyperframes` | Port a Remotion composition to HyperFrames HTML.                                                                             |
+| Skill | Purpose |
+| --- | --- |
+| `/hyperframes` | Read first: render contract, workflows under `references/`, including launch, explainer, music, captions and overlays |
+| `/hyperframes-cli` | CLI loop, scoped check and snapshot review, rendering and diagnostics |
+| `/hyperframes-registry` | Catalog blocks and components |
+| `/media-use` | Media acquisition, processing and optional providers |
+| `/figma` | Figma import (optional token) |
+| `/remotion-to-hyperframes` | Remotion migration |
+| `/slideshow` | Interactive decks |
 
-Domain skills:
-
-| Skill                    | Covers                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `/hyperframes-core`      | The composition contract: `data-*` timing, clips, tracks, sub-compositions, variables, determinism. |
-| `/hyperframes-animation` | Motion rules, scene blueprints, transitions, runtime adapters (GSAP, CSS, Lottie, Three.js, Anime.js, WAAPI, TypeGPU). |
-| `/hyperframes-keyframes` | Seek-safe keyframes: zooms, reframes, Ken Burns, paths, masks, SVG, 3D.                            |
-| `/hyperframes-creative`  | Design specs (`frame.md`), palettes, typography, narration, beat planning.                         |
-| `/media-use`             | Sourcing and generating media: music, SFX, images, logos, voice, grades, captions, background removal. |
-| `/hyperframes-audio`     | Mixing placed audio: carve, effects, automation, submix buses.                                     |
-| `/hyperframes-cli`       | The CLI loop: init, lint, check, snapshot, render, batch render, diagnostics.                      |
-| `/hyperframes-registry`  | Finding and installing catalog blocks and components.                                               |
-| `/hyperframes-studio`    | Studio conventions: timeline layout, safe zones, when a message is an edit.                        |
-| `/figma`                 | Importing Figma assets, tokens, components and storyboards.                                        |
-
-On this server the upstream skills' shell commands become tool calls. `/hyperframes-server` carries the mapping.
+The entire matching upstream tree is copied, including supporting references, scripts and assets. On this server shell commands become tool calls; `/hyperframes-server` carries the mapping. Older community instructions may name retired standalone skills; use `hyperframes/references/` instead of installing stale skills to restore an old count.
 
 ## Community skills (served from the service, run on your machine)
 

@@ -41,7 +41,8 @@ export function runCli(args: string[], options: CliOptions): Promise<CliResult> 
   return new Promise((resolvePromise, reject) => {
     const child = spawn(config.cli, args, {
       cwd: options.cwd,
-      env: { ...process.env, ...options.env, FORCE_COLOR: '0', NO_COLOR: '1', CI: '1' },
+      env: { ...process.env, ...options.env, FORCE_COLOR: '0', NO_COLOR: '1', CI: '1',
+        HEYGEN_NO_ANALYTICS: '1', HEYGEN_NO_UPDATE_CHECK: '1', HEYGEN_NONINTERACTIVE: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
     })
@@ -126,13 +127,17 @@ export function parseJsonOutput(stdout: string): unknown {
 }
 
 /**
- * Subcommands `run_cli` may invoke. Everything that opens a browser, talks to
- * a hosted account, publishes, reports telemetry or syncs with the desktop app
- * (`catch-up`) is left out; those have no place behind an agent API on a server.
+ * Subcommands `run_cli` may invoke. Interactive account management, publishing,
+ * telemetry and desktop hand-off stay out. Allowed media-use/tts/capture commands
+ * may contact optional providers when configured: this is a trusted-agent API,
+ * not a guarantee that every subcommand is offline or cost-free.
  */
 export const allowedCliCommands = new Set([
   'lint',
   'check',
+  'inspect',
+  'layout', // Upstream compatibility alias for inspect.
+  'validate', // Upstream compatibility runtime/contrast diagnostic.
   'snapshot',
   'timeline',
   'info',
@@ -178,8 +183,8 @@ export function assertAllowedCli(args: string[]): void {
       `subcommand "${command}" is not available through the agent API; allowed: ${[...allowedCliCommands].sort().join(', ')}`,
     )
   }
-  if (args.some((a) => a === '--docker')) throw new Error('--docker is not available inside the service')
-  if (args.some((a) => a === '--file-issue')) throw new Error('--file-issue publishes the project; refused')
+  if (args.some((a) => a === '--docker' || a.startsWith('--docker='))) throw new Error('--docker is not available inside the service')
+  if (args.some((a) => a === '--file-issue' || a.startsWith('--file-issue='))) throw new Error('--file-issue publishes the project; refused')
   const flagRule = flagRules[command]
   if (flagRule) {
     const flags = args.slice(1)

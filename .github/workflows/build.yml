@@ -92,6 +92,7 @@ jobs:
 
       - name: Build (make ${{ matrix.target }})
         run: |
+          start-cli s9pk init-workspace ..
           make ${{ matrix.target }}
           echo ""
           echo "SHA256SUMs:"

@@ -45,8 +45,21 @@ Studio was built for a desktop screen. On a phone held upright, this package sho
 - **Configure Provider Keys** — optional keys for hosted voices and music (HeyGen), text-to-speech (ElevenLabs), vision descriptions and Gemini voices (Gemini), capture descriptions (OpenRouter) and Figma import. Leave a field empty to skip that provider.
 - **Configure Rendering** — how many Chrome workers a render uses, the low-memory profile for small servers, and how many render jobs run at the same time.
 
+## HeyGen media tools
+
+The package bundles the official HeyGen CLI v0.10.0 for both server architectures. Your agent can check it through `run_cli` with `project` set and `args: ["media-use", "resolve", "--doctor", "--json"]`; the same call is available at `POST /api/v1/cli`. Check the separate executable/version/authentication rows, not just the overall `ok`.
+
+No account or credits are included. Server-side catalog search, HeyGen voices and avatar generation need an owner-authorized provider key from **Configure Provider Keys**; API-key operations use API credits. An OAuth sign-in on the agent's computer is separate and does not authorize this server. Missing credentials are a blocked provider setup, not a missing executable. Agents must get approval and an agreed credit budget before generating remote media. Do not send provider keys in chat or CLI arguments. Local rendering and uploaded narration do not need a HeyGen account.
+
+Analytics and automatic update checks are disabled. The executable updates only with the package. Optional local Kokoro, whisper.cpp, Parakeet and Beat This! runtimes/models are not preinstalled; no large model download is performed automatically by package installation.
+
 ## Limitations
 
 - Local speech-to-text (whisper) and the local Kokoro voice are not installed. Narration needs a HeyGen or ElevenLabs key from **Configure Provider Keys**, or an audio file your agent uploads.
 - Compositions that load libraries from a CDN, such as the GSAP script the template uses, need the server to reach the internet during preview and render.
 - HeyGen cloud rendering, publishing to hyperframes.dev and the HeyGen desktop app are not part of this package; rendering happens on your server.
+
+
+## Upgrading to 0.8.185
+
+Read the served `hyperframes` skill first: upstream consolidated its render contract and production workflows into seven complete skills (22 including the StartOS, community and HeyGen trees). Former standalone workflows now live under `hyperframes/references/`. Snapshot supports scoped `range`/`composition` and `review`; optional provider image descriptions are disabled on the dedicated REST/MCP snapshot operation; `run_cli` requires an explicit `--describe true` opt-in. Local rendering needs no hosted account. Existing project paths, credentials, actions and backup layout are unchanged.
