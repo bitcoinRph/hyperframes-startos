@@ -155,7 +155,26 @@ jobs:
           SHA: ${{ needs.checks.outputs.sha }}
           VERSION: ${{ needs.checks.outputs.version }}
         run: |
-          command -v unsquashfs >/dev/null || { sudo apt-get update && sudo apt-get install -y squashfs-tools; }
+          set -euo pipefail
+          storage_diagnostics() {
+            echo 'Native packed QA storage (read-only diagnostics)'
+            df -hT
+            df -i
+            docker info --format '{{json .DriverStatus}} {{.DockerRootDir}}' || true
+            docker system df || true
+            for path in /var/lib/docker /var/lib/containerd; do
+              if sudo test -d "$path"; then
+                sudo df -hT "$path"
+                sudo du -xsh "$path" || true
+              fi
+            done
+          }
+          trap storage_diagnostics EXIT
+          storage_diagnostics
+          if ! command -v unsquashfs >/dev/null || ! command -v sqfs2tar >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y squashfs-tools squashfs-tools-ng
+          fi
           python3 .github/scripts/native-package-qa.py --arch '${{ matrix.arch }}' --expected-sha "$SHA" --expected-version "$VERSION" --output-dir 'release-artifacts/${{ matrix.arch }}'
       - name: Upload verified bytes directly from this runner
         env:

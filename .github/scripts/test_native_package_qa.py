@@ -171,13 +171,66 @@ class PackageQATests(unittest.TestCase):
                         return '/usr/local/bin/hyperframes\n/usr/local/bin/heygen'
                     return 'Usage: help'
                 raise AssertionError(args)
-            with patch.object(self.qa, 'run', side_effect=fake_run), patch.object(self.qa.platform, 'machine', return_value='aarch64'):
+            with patch.object(self.qa, 'run', side_effect=fake_run), \
+                 patch.object(self.qa, 'run_stream', return_value='sha256:' + 'b' * 64) as stream, \
+                 patch.object(self.qa.platform, 'machine', return_value='aarch64'):
                 report = self.qa.perform_qa('aarch64', 'a' * 40, '0.8.185:0', out, repo)
+            self.assertEqual(stream.call_args.args[1], ['docker', 'image', 'import', '-'])
+            extraction = next(c for c in calls if c[0] == 'unsquashfs')
+            self.assertEqual(set(extraction[4:]), {'opt/hyperframes/skills', 'opt/hyperframes-startos/skills',
+                                                 'opt/heygen-skills/skills', 'opt/hyperframes-community/skills'})
+            self.assertFalse(any(c[0] == 'tar' for c in calls))
+            runtime_calls = [c for c in calls if c[:2] == ['docker', 'run']]
+            for command in runtime_calls:
+                self.assertIn('sha256:' + 'b' * 64, command)
+                self.assertIn('--network=none', command)
+                self.assertIn('-i', command)
+            for probe in [('hyperframes', '--version'), ('hyperframes', '--help'),
+                          ('heygen', '--version'), ('heygen', '--help'), ('--doctor', '--json')]:
+                self.assertTrue(any(tuple(c[-2:]) == probe for c in runtime_calls), probe)
             self.assertEqual(report['image_origin'], 'package-squashfs-import')
             self.assertEqual((out / package.name).read_bytes(), package.read_bytes())
             self.assertEqual(report['submodules']['hyperframes']['sha'], 'a' * 40)
             self.assertTrue((out / 'SHA256SUMS').exists())
             self.assertIn(['docker', 'image', 'rm', 'sha256:' + 'b' * 64], calls)
+
+    def test_stream_passes_bytes_without_an_intermediate_archive(self):
+        import sys
+        result = self.qa.run_stream(
+            [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(b"packed bytes" * 100000)'],
+            [sys.executable, '-c', 'import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'])
+        self.assertEqual(result, hashlib.sha256(b'packed bytes' * 100000).hexdigest())
+
+    def test_stream_rejects_failed_producer_even_when_consumer_succeeds(self):
+        import sys
+        with self.assertRaisesRegex(RuntimeError, 'producer.*7'):
+            self.qa.run_stream([sys.executable, '-c', 'print("partial"); raise SystemExit(7)'],
+                               [sys.executable, '-c', 'import sys; sys.stdin.buffer.read(); print("success")'])
+
+    def test_stream_rejects_failed_consumer_and_bounds_a_hung_producer(self):
+        import sys
+        with self.assertRaisesRegex(RuntimeError, 'consumer.*8'):
+            self.qa.run_stream([sys.executable, '-c', 'import time; time.sleep(30)'],
+                               [sys.executable, '-c', 'raise SystemExit(8)'], timeout=2)
+
+    def test_stream_timeout_is_fatal(self):
+        import subprocess
+        import sys
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.qa.run_stream([sys.executable, '-c', 'import time; time.sleep(30)'],
+                               [sys.executable, '-c', 'import sys; sys.stdin.buffer.read()'], timeout=0.1)
+
+    def test_packed_import_streams_complete_metadata_and_never_skips_files(self):
+        from unittest.mock import patch
+        with patch.object(self.qa, 'run_stream', return_value='sha256:' + 'b' * 64) as stream:
+            image = self.qa.import_packed_image(Path('/qa/runtime.squashfs'))
+        self.assertEqual(image, 'sha256:' + 'b' * 64)
+        stream.assert_called_once_with(
+            ['sqfs2tar', '--no-skip', '--root-becomes', '.', '/qa/runtime.squashfs'],
+            ['docker', 'image', 'import', '-'])
+        with patch.object(self.qa, 'run_stream', return_value='not-a-content-id'):
+            with self.assertRaisesRegex(ValueError, 'content ID'):
+                self.qa.import_packed_image(Path('/qa/runtime.squashfs'))
 
     def test_commitment_accepts_sdk_unpadded_standard_base64(self):
         self.qa.validate_commitment({'rootSighash': 'A' * 43, 'rootMaxsize': 123})

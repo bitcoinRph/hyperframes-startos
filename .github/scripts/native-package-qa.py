@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed native pre-upload QA. Python stdlib; Docker + unsquashfs + tar required.
+"""Fail-closed native pre-upload QA. Docker + unsquashfs + sqfs2tar required.
 
 start-cli s9pk inspect <package> {manifest,commitment,file-tree} --format json
 and inspect <package> cat <path> are the supported inspection commands.
@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 DOCTOR_REQUIRED = ('bundled SFX assets', 'heygen on PATH', 'heygen version',
                    'ffmpeg on PATH', 'ffprobe on PATH', 'node version')
@@ -119,6 +120,41 @@ def run(args, *, cwd=None, output=None):
     return text.strip()
 
 
+def run_stream(producer, consumer, *, timeout=600):
+    """Pipe multi-GB bytes without an archive file; fail closed on EITHER process."""
+    deadline = time.monotonic() + timeout
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(producer, stdout=subprocess.PIPE, stderr=errors)
+        assert process.stdout is not None  # Popen stdout=PIPE
+        try:
+            with process.stdout:
+                result = subprocess.run(consumer, stdin=process.stdout, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE, timeout=timeout)
+            if result.returncode:
+                raise RuntimeError(f'consumer {consumer} exited {result.returncode}: '
+                                   f'{result.stderr.decode(errors="replace")}')
+            code = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            if code:
+                errors.seek(0)
+                raise RuntimeError(f'producer {producer} exited {code}: '
+                                   f'{errors.read().decode(errors="replace")}')
+            return result.stdout.decode().strip()
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+
+
+def import_packed_image(squashfs):
+    # Preserve root ownership/mode/xattrs and hardlinks; never skip unsupported files.
+    # No full extracted root or root.tar: containerd already stores blob + snapshot.
+    image = run_stream(['sqfs2tar', '--no-skip', '--root-becomes', '.', str(squashfs)],
+                       ['docker', 'image', 'import', '-'])
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', image):
+        raise ValueError('Docker import did not return a content ID')
+    return image
+
+
 def runtime_command(image, args):
     # env -i removes even image-baked credentials. No host mounts or env forwarding.
     return ['docker', 'run', '--rm', '--pull=never', '--network=none', '--read-only',
@@ -175,7 +211,10 @@ def perform_qa(arch, sha, version, out, repo):
         squashfs = temp / 'runtime.squashfs'
         run(['start-cli', 's9pk', 'inspect', str(package), 'cat', prefix + '.squashfs'], output=squashfs)
         root = temp / 'root'
-        run(['unsquashfs', '-d', str(root), str(squashfs)])
+        # Extract only the four inventory roots; stream the complete runtime to Docker.
+        run(['unsquashfs', '-d', str(root), str(squashfs),
+             'opt/hyperframes/skills', 'opt/hyperframes-startos/skills',
+             'opt/heygen-skills/skills', 'opt/hyperframes-community/skills'])
         trees = {}
         for source, target in [('hyperframes/skills', 'opt/hyperframes/skills'),
                                ('skills', 'opt/hyperframes-startos/skills'),
@@ -197,11 +236,7 @@ def perform_qa(arch, sha, version, out, repo):
         report['image_env_sha256'] = hashlib.sha256(inspect('cat', prefix + '.env').encode()).hexdigest()
         try:
             if image is None:
-                archive = temp / 'root.tar'
-                run(['tar', '--numeric-owner', '-C', str(root), '-cf', str(archive), '.'])
-                image = run(['docker', 'image', 'import', str(archive)])
-                if not re.fullmatch(r'sha256:[0-9a-f]{64}', image):
-                    raise ValueError('Docker import did not return a content ID')
+                image = import_packed_image(squashfs)
                 imported = True
             report['image_id'] = image
             report['image_origin'] = 'package-squashfs-import' if imported else 'exact-manifest-content-id'

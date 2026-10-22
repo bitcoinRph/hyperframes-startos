@@ -36,5 +36,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('persist-credentials: false', text)
         self.assertNotIn('continue-on-error: true\n        uses:', text)
 
+    def test_packed_qa_tools_and_non_destructive_storage_diagnostics(self):
+        text = (ROOT/'.github/workflows/directRelease.yml').read_text()
+        self.assertIn('squashfs-tools squashfs-tools-ng', text)
+        self.assertIn('command -v sqfs2tar', text)
+        self.assertIn('docker system df', text)
+        self.assertIn('df -hT', text)
+        self.assertIn('df -i', text)
+        self.assertIn('du -xsh', text)
+        self.assertIn('trap storage_diagnostics EXIT', text)
+        for forbidden in ('prune', 'rm -rf', 'docker system clean'):
+            self.assertNotIn(forbidden, text)
+
 if __name__ == '__main__':
     unittest.main()
