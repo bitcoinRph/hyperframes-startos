@@ -126,6 +126,8 @@ export function buildRenderArgs(req: RenderRequest, projectDir: string): { args:
   if (req.fps !== undefined) {
     const fps = String(req.fps)
     if (!/^\d{1,6}(\/\d{1,6})?$/.test(fps)) throw badRequest('fps must be an integer or a rational like 30000/1001')
+    const [num, den = 1] = fps.split('/').map(Number)
+    if (den === 0 || num / den < 1 || num / den > 240) throw badRequest('fps must be in the range 1-240 with a nonzero denominator')
     args.push('--fps', fps)
   }
   if (req.composition) {
@@ -154,7 +156,7 @@ export function buildRenderArgs(req: RenderRequest, projectDir: string): { args:
     if (typeof extra !== 'string' || !extra.startsWith('--') || extra.includes('\0')) {
       throw badRequest('extraArgs must be "--flag" or "--flag=value" strings')
     }
-    if (extra === '--docker' || extra.startsWith('--output') || extra.startsWith('-o')) throw badRequest(`${extra} is not allowed`)
+    if (extra === '--docker' || extra.startsWith('--docker=') || extra.startsWith('--output') || extra.startsWith('-o') || /^--(?:batch|variables-file)(?:=|$)/.test(extra)) throw badRequest(`${extra} is not allowed`)
     args.push(extra)
   }
   args.push('--quiet')

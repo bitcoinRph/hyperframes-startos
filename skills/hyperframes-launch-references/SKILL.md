@@ -126,3 +126,6 @@ Apache license grants no trademark rights, so HeyGen marks never ship in a user'
 - A brief that needs a longer narrative than a 10–13 s sting: import a film for study, then
   build from `create_project` with the registry (`/hyperframes-registry`) rather than
   repairing a 2026-era film.
+
+
+For HyperFrames 0.8.185, read the served `hyperframes` skill first: it now owns the render contract and workflow references previously split across standalone skills. The bundled official catalog contains seven complete skills (22 including StartOS, community and HeyGen trees). Snapshot supports scoped `range`/`composition` and `review`; provider image descriptions are disabled on the dedicated REST/MCP snapshot operation; `run_cli` requires an explicit `--describe true` opt-in. No hosted account is needed for the local render path.

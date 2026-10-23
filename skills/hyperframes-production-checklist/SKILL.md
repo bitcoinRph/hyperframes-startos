@@ -80,3 +80,6 @@ Work the list top to bottom. A gate that cannot be checked is reported, not skip
       (no narration because no TTS provider, a CDN script that had to be inlined, and so on).
 - [ ] The project is left in a state the user can keep editing in Studio: no half-written
       files, snapshots in `snapshots/`, renders in `renders/`.
+
+
+For HyperFrames 0.8.185, read the served `hyperframes` skill first: it now owns the render contract and workflow references previously split across standalone skills. The bundled official catalog contains seven complete skills (22 including StartOS, community and HeyGen trees). Snapshot supports scoped `range`/`composition` and `review`; provider image descriptions are disabled on the dedicated REST/MCP snapshot operation; `run_cli` requires an explicit `--describe true` opt-in. No hosted account is needed for the local render path.

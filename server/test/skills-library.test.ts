@@ -19,7 +19,7 @@ async function files(dir: string, prefix = ''): Promise<string[]> {
   return out.sort()
 }
 
-test('Docker skill assembly serves 36 unique skills, all eight community skills, complete assets and documented overlays through REST/MCP', async () => {
+test('Docker skill assembly serves every current upstream/wrapper skill, all eight community skills, complete assets and documented overlays through REST/MCP', async () => {
   const image = await mkdtemp(join(tmpdir(), 'hf-skills-image-'))
   try {
     const docker = await readFile(join(repo, 'Dockerfile'), 'utf8')
@@ -44,7 +44,26 @@ test('Docker skill assembly serves 36 unique skills, all eight community skills,
         }
       }
     }
-    assert.equal(names.length, 36)
+    const expected: string[] = []
+    for (const source of ['hyperframes/skills', 'skills', 'community-skills/skills', 'heygen-skills/skills']) {
+      for (const entry of await readdir(join(repo, source), { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          await readFile(join(repo, source, entry.name, 'SKILL.md'))
+          expected.push(entry.name)
+        }
+      }
+    }
+    assert.deepEqual([...names].sort(), expected.sort())
+    const official = ['figma', 'hyperframes', 'hyperframes-cli', 'hyperframes-registry', 'media-use', 'remotion-to-hyperframes', 'slideshow']
+    assert.deepEqual((await readdir(join(repo, 'hyperframes/skills'), { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort(), official)
+    for (const name of official) {
+      const source = join(repo, 'hyperframes/skills', name)
+      const bundled = join(image, '/opt/hyperframes/skills', name)
+      assert.deepEqual(await files(bundled), await files(source))
+      for (const path of await files(source)) {
+        assert.deepEqual(await readFile(join(bundled, path)), await readFile(join(source, path)), `official skill file changed or missing: ${name}/${path}`)
+      }
+    }
     assert.equal(new Set(names).size, names.length, 'Duplicate skills must not be hidden by server precedence')
     const builtCommunity = join(image, '/opt/hyperframes-community/skills')
     assert.deepEqual((await readdir(builtCommunity)).sort(), community)
@@ -74,8 +93,8 @@ test('Docker skill assembly serves 36 unique skills, all eight community skills,
     const response = await app.request('/api/v1/skills', { headers })
     assert.equal(response.status, 200)
     const catalog = await response.json() as { name: string; description: string }[]
-    assert.equal(catalog.length, 36)
-    assert.equal(new Set(catalog.map(s => s.name)).size, 36)
+    assert.equal(catalog.length, expected.length)
+    assert.equal(new Set(catalog.map(s => s.name)).size, expected.length)
     for (const name of [...community, 'heygen-avatar', 'heygen-video', 'heygen-translate']) {
       assert.ok(catalog.find(s => s.name === name)?.description)
       const res = await app.request(`/skills/${name}/SKILL.md`, { headers })
@@ -91,7 +110,7 @@ test('Docker skill assembly serves 36 unique skills, all eight community skills,
       return data.result.content[0].text as string
     }
     const mcpCatalog = JSON.parse(await call('list_skills'))
-    assert.equal(mcpCatalog.length, 36)
+    assert.equal(mcpCatalog.length, expected.length)
     for (const name of community) {
       const text = await call('read_skill', { skill: name })
       assert.equal(text, await readFile(join(builtCommunity, name, 'SKILL.md'), 'utf8'))

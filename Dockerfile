@@ -10,12 +10,14 @@
 # the `hyperframes` submodule tag. See UPDATING.md.
 FROM node:22.23.3-bookworm-slim AS base
 
-ARG HYPERFRAMES_VERSION=0.8.162
+ARG HYPERFRAMES_VERSION=0.8.185
 # Set by `docker buildx build --platform`; picks the headless-shell source.
 ARG TARGETARCH=amd64
 # chrome-for-testing publishes no linux-arm64 build; Playwright ships a pinned
 # arm64 headless shell (Google's build). Same pins as upstream.
 ARG PLAYWRIGHT_VERSION=1.61.1
+ARG CHROME_HEADLESS_SHELL_VERSION=156.0.8078.47
+ARG PUPPETEER_BROWSERS_VERSION=3.2.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl unzip xz-utils chromium \
@@ -55,8 +57,9 @@ ENV CONTAINER=true
 ENV HYPERFRAMES_VERSION=${HYPERFRAMES_VERSION}
 
 # chrome-headless-shell unlocks BeginFrame capture (deterministic, faster).
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-      npx --yes @puppeteer/browsers install chrome-headless-shell@stable \
+RUN BROWSER_ARCH="$(dpkg --print-architecture)" \
+    && if [ "$BROWSER_ARCH" = "amd64" ]; then \
+      npx --yes @puppeteer/browsers@${PUPPETEER_BROWSERS_VERSION} install chrome-headless-shell@${CHROME_HEADLESS_SHELL_VERSION} \
         --path /opt/chrome-cache; \
     else \
       PLAYWRIGHT_BROWSERS_PATH=/opt/chrome-cache \
@@ -76,6 +79,15 @@ ENV HYPERFRAMES_CHROME_PATH=/opt/chrome/chrome-headless-shell
 
 RUN npm install -g hyperframes@${HYPERFRAMES_VERSION} && npm cache clean --force \
     && hyperframes --version
+
+# Official media-use shells out to `heygen` on PATH (>=0.3.0).
+# Pinned static Linux binaries for both arches; no provider account is bundled.
+COPY assets/install-heygen.sh /opt/hyperframes-startos/install-heygen.sh
+COPY assets/heygen-NOTICE /usr/local/share/licenses/heygen/NOTICE
+ENV HEYGEN_NO_ANALYTICS=1 HEYGEN_NO_UPDATE_CHECK=1 HEYGEN_NONINTERACTIVE=1
+RUN sh /opt/hyperframes-startos/install-heygen.sh /usr/local \
+    && heygen --version | grep -F 'v0.10.0' \
+    && heygen --help >/dev/null
 
 # ── Agent API and MCP server ────────────────────────────────────────────────
 FROM base AS server-build
@@ -117,7 +129,7 @@ COPY assets/hf-studio assets/hf-server /usr/local/bin/
 RUN chmod +x /usr/local/bin/hf-studio /usr/local/bin/hf-server
 
 ENV HF_SKILLS_DIRS=/opt/hyperframes/skills:/opt/hyperframes-startos/skills:/opt/hyperframes-community/skills:/opt/heygen-skills/skills
-ENV HF_SERVER_VERSION=0.2.1
+ENV HF_SERVER_VERSION=0.2.2
 ENV HOME=/data/home
 ENV HYPERFRAMES_PROJECTS_DIR=/data/projects
 ENV HF_STATE_DIR=/data/startos

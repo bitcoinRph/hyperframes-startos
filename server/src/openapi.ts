@@ -164,15 +164,15 @@ export function openapi(serverUrls: string[]) {
         parameters: [projectParam],
         post: {
           summary: 'hyperframes check --json',
-          requestBody: { content: json({ type: 'object', properties: { snapshots: { type: 'boolean' }, at: { type: 'array', items: { type: 'number' } }, samples: { type: 'integer' }, strict: { type: 'boolean' }, contrast: { type: 'boolean' }, atTransitions: { type: 'boolean' } } }) },
+          requestBody: { content: json({ type: 'object', properties: { snapshots: { type: 'boolean' }, at: { type: 'array', items: { type: 'number' } }, samples: { type: 'integer' }, strict: { type: 'boolean' }, contrast: { type: 'boolean' }, atTransitions: { type: 'boolean' }, range: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, components: { type: 'string', maxLength: 500 }, maxTransitionSamples: { type: 'integer', minimum: 1, maximum: 10000 }, maxIssues: { type: 'integer', minimum: 1, maximum: 1000 }, collapseStatic: { type: 'boolean' } } }) },
           responses: ok(),
         },
       },
       '/api/v1/projects/{project}/snapshot': {
         parameters: [projectParam],
         post: {
-          summary: 'Capture PNG frames into snapshots/; fetch them over the files route',
-          requestBody: { content: json({ type: 'object', properties: { at: { type: 'array', items: { type: 'number' } }, frames: { type: 'integer' }, zoom: { type: 'string' }, end: { type: 'boolean' } } }) },
+          summary: 'Capture PNGs or a review set (beats, seams, phone sheets) into snapshots/; returns upstream JSON metadata, with provider descriptions disabled',
+          requestBody: { content: json({ type: 'object', properties: { at: { type: 'array', items: { type: 'number' } }, frames: { type: 'integer' }, zoom: { type: 'string' }, end: { type: 'boolean' }, review: { type: 'boolean' }, range: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, composition: { type: 'string', maxLength: 500 } } }) },
           responses: ok(),
         },
       },

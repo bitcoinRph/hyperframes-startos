@@ -59,6 +59,18 @@ Both daemons are built through `sdk.Daemons.dynamic`, so a change that only affe
 
 Environment set for both daemons: `HOME=/data/home`, `HYPERFRAMES_NO_TELEMETRY=1`, `HYPERFRAMES_NO_UPDATE_CHECK=1`, `HYPERFRAMES_SKIP_SKILLS=1`, `HYPERFRAMES_PROJECTS_DIR=/data/projects`, `CONTAINER=true`, plus the provider keys below when set and `PRODUCER_LOW_MEMORY_MODE` when forced.
 
+### HeyGen executable and optional provider dependencies
+
+The image includes the official **HeyGen CLI v0.10.0** at `/usr/local/bin/heygen`, not a similarly named npm/Python package. `assets/install-heygen.sh` installs the static Linux amd64/arm64 release archives with separately pinned SHA-256 hashes before extraction. Provenance: [official docs](https://developers.heygen.com/cli), [source/release](https://github.com/heygen-com/heygen-cli/releases/tag/v0.10.0), and the matching `checksums.txt` on the official CDN. Apache-2.0 LICENSE, README and NOTICE are retained under `/usr/local/share/licenses/heygen/`. Analytics and update checks are disabled; update only through a reviewed image rebuild.
+
+Agents reach it **through HyperFrames**, not arbitrary HeyGen commands: MCP `run_cli` or `POST /api/v1/cli` with `{"project":"demo","args":["media-use","resolve","--doctor","--json"]}`. The CLI inherits PATH and the configured `HEYGEN_API_KEY`; its official media-use subprocesses discover `heygen` there. Inspect individual `heygen on PATH`, version and authentication rows: doctor's top-level `ok` does **not** certify provider authentication. Doctor may query the stable-version CDN, and with credentials its auth probe contacts HeyGen.
+
+**Executable available does not mean account authorized.** No credential is bundled or created. The owner may use **Configure Provider Keys** for server-side HeyGen API access (uses API credits); OAuth login is a separate attended flow on the agent host, not an API tool here. A remote agent's local OAuth session is not forwarded to this container. Do not invoke generation without explicit owner approval and a credit/budget decision; subscription free allowance is metered, not guaranteed free. Missing credentials block catalog/voice/avatar provider workflows, not local HTML rendering. Standalone HeyGen skills still execute on the agent host.
+
+Optional local dependencies are **not** silently installed/downloaded: Kokoro requires Python 3.10+, `kokoro-onnx`, `soundfile` and model/voice files; whisper.cpp needs git, CMake, a C/C++ compiler and weights; Parakeet uses an opt-in runtime/model download (~640 MB upstream); Beat This! needs a configured Python with `beat_this` plus a checkpoint (`HYPERFRAMES_BEAT_THIS_PYTHON` / `HYPERFRAMES_BEAT_THIS_CHECKPOINT`). Cutout models and semantic catalog search also download on demand. Apple-Silicon `mflux`/`parakeet-mlx` and local LTX are creator-host alternatives, not Linux image dependencies. See the shipped `media-use/references/setup-providers.md`, upstream `whisper/manager.ts`, `audio/providers.ts` and `audio/analysis/providers/localProviders.ts`. None of these optional model workflows is certified by shipping its skill files.
+
+The bearer-token API is for trusted agents. Project selection and file APIs reject traversal/symlink escapes, and subprocesses use no shell; generic CLI arguments are not a filesystem or network sandbox. Keep media/output paths project-relative, never pass secrets as arguments, and do not expose the API to untrusted agents. No direct HeyGen auth/update/delete/feedback endpoint is added.
+
 ## Volume and Data Layout
 
 | Volume | Mount Point | Purpose                       |
@@ -169,8 +181,8 @@ Upstream Studio lays its panels out with a fixed floor: a 360 px preview plus tw
 
 1. **Studio shows one project at a time.** Upstream runs one `preview` per project directory; here the project is selected by an action or by the API. Switching restarts Studio (a few seconds).
 2. **Studio is gated by the StartOS proxy, not by HyperFrames.** Upstream Studio binds to loopback with no auth. Here it listens on all interfaces inside the container and StartOS enforces basic auth.
-3. **No whisper, no Kokoro, no MusicGen.** `transcribe`, local `tts` and local music fall back are unavailable unless a future image adds them; `doctor` reports this. Hosted voices work with provider keys.
-4. **No hosted features.** `publish`, `cloud`, `lambda`, `cloudrun`, `auth login`, the desktop-app hand-off and telemetry are disabled or refused.
+3. **Optional local models are not bundled.** whisper.cpp, Kokoro, Parakeet, Beat This! and local music generation need their own runtimes/weights (see above); no large models are silently downloaded at build time. Hosted voices additionally require working provider authorization, not merely a configured field.
+4. **No hosted rendering/publishing or interactive account management.** `publish`, `cloud`, `lambda`, `cloudrun`, `auth login`, the desktop-app hand-off and telemetry are disabled or refused. Optional media-use provider calls are distinct and require owner authorization.
 5. **`render --docker` is unavailable**; the service already is the container, with the pinned headless shell that `--docker` would provide.
 6. **Outbound network** is needed for CDN scripts in compositions (the template loads GSAP from jsDelivr), Google Fonts, the registry (`catalog`, `add`, `catalog_item`, `init --example`: `raw.githubusercontent.com`), `import_project` (`api.github.com`, `raw.githubusercontent.com`, `media.githubusercontent.com`) and provider APIs. `HF_REGISTRY_URL` points `catalog_item` at another registry; the CLI reads its own from the project's `hyperframes.json`.
 7. **Low-memory detection reads host RAM**, as upstream documents for containers; force it in **Configure Rendering** on small servers.
@@ -223,3 +235,8 @@ skills: served at /skills/ and hyperframes://skills/{skill}/{path}
 backup: volume main minus home/.cache, home/.npm, tmp
 not_available: [publish, cloud, lambda, cloudrun, auth, telemetry, render --docker, whisper, kokoro]
 ```
+
+
+## Upgrading to 0.8.185
+
+Read the served `hyperframes` skill first: upstream consolidated its render contract and production workflows into seven complete skills (22 including the StartOS, community and HeyGen trees). Former standalone workflows now live under `hyperframes/references/`. Snapshot supports scoped `range`/`composition` and `review`; optional provider image descriptions are disabled on the dedicated REST/MCP snapshot operation; `run_cli` requires an explicit `--describe true` opt-in. Local rendering needs no hosted account. Existing project paths, credentials, actions and backup layout are unchanged.
