@@ -167,6 +167,13 @@ def runtime_command(image, args):
             'HYPERFRAMES_NO_TELEMETRY=1', 'HYPERFRAMES_NO_UPDATE_CHECK=1', *args]
 
 
+# Upstream commits test fixtures as plain blobs under a filter=lfs attribute. With git-lfs
+# installed, status runs the clean filter on any re-stat'd file and reports it modified, so
+# compare the raw checked-out bytes against the pinned blobs instead.
+RAW_GIT = ['git', '-c', 'filter.lfs.process=', '-c', 'filter.lfs.clean=cat',
+           '-c', 'filter.lfs.smudge=cat', '-c', 'filter.lfs.required=false']
+
+
 def perform_qa(arch, sha, version, out, repo):
     if platform.machine() != arch:
         raise ValueError('QA must run on the matching native host, not emulation')
@@ -177,7 +184,7 @@ def perform_qa(arch, sha, version, out, repo):
     for name in ('hyperframes', 'community-skills'):
         entry = git('ls-tree', 'HEAD', '--', name).split()
         actual = run(['git', 'rev-parse', 'HEAD'], cwd=repo / name)
-        dirty = run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo / name)
+        dirty = run([*RAW_GIT, 'status', '--porcelain', '--untracked-files=all'], cwd=repo / name)
         if len(entry) != 4 or entry[0] != '160000' or entry[2] != actual or dirty:
             raise ValueError(f'unpinned or dirty submodule: {name}')
         submodules[name] = {'sha': actual, 'tree': run(['git', 'rev-parse', 'HEAD^{tree}'], cwd=repo / name)}

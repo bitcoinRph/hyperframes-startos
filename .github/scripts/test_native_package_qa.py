@@ -130,7 +130,7 @@ class PackageQATests(unittest.TestCase):
             def fake_run(args, *, cwd=None, output=None):
                 calls.append(args)
                 if args[0] == 'git':
-                    if args[1] == 'status': return ''
+                    if 'status' in args: return ''
                     if args[1] == 'ls-tree': return '160000 commit ' + 'a' * 40 + '\t' + args[-1]
                     return 'a' * 40
                 if args[:2] == ['start-cli', '--version']: return 'start-cli 2.1.0'
@@ -193,6 +193,27 @@ class PackageQATests(unittest.TestCase):
             self.assertEqual(report['submodules']['hyperframes']['sha'], 'a' * 40)
             self.assertTrue((out / 'SHA256SUMS').exists())
             self.assertIn(['docker', 'image', 'rm', 'sha256:' + 'b' * 64], calls)
+
+    def test_submodule_status_ignores_lfs_clean_filter_but_catches_real_edits(self):
+        import os, subprocess
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            git = lambda *a: subprocess.run(['git', *a], cwd=repo, check=True, capture_output=True, text=True).stdout
+            git('init', '-q')
+            git('config', 'user.email', 'qa@example.invalid')
+            git('config', 'user.name', 'qa')
+            git('config', 'filter.lfs.clean', 'printf pointer')
+            git('config', 'filter.lfs.required', 'true')
+            (repo / 'fixture.html').write_text('plain blob, not a pointer')
+            git('-c', 'filter.lfs.clean=cat', 'add', 'fixture.html')
+            (repo / '.gitattributes').write_text('*.html filter=lfs\n')
+            git('add', '.gitattributes')
+            git('commit', '-qm', 'fixture')
+            os.utime(repo / 'fixture.html', (1, 1))
+            self.assertIn('fixture.html', git('status', '--porcelain'))
+            self.assertEqual(self.qa.run([*self.qa.RAW_GIT, 'status', '--porcelain'], cwd=repo), '')
+            (repo / 'fixture.html').write_text('edited')
+            self.assertIn('fixture.html', self.qa.run([*self.qa.RAW_GIT, 'status', '--porcelain'], cwd=repo))
 
     def test_stream_passes_bytes_without_an_intermediate_archive(self):
         import sys
