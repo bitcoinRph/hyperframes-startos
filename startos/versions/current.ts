@@ -1,7 +1,7 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '0.8.185:1',
+  version: '0.8.185:2',
   releaseNotes: {
     en_US:
       'HyperFrames 0.8.185 (from 0.8.162). Official skills are consolidated into seven complete version-matched trees: read hyperframes first for the render contract and workflow references. Adds scoped check and snapshot review controls through REST and MCP, with optional provider image descriptions disabled by default. Includes upstream capture motion blur, render/audio and browser reliability fixes. Pins the amd64 headless browser and fixes native arm64 browser selection. Existing projects, credentials and backup layout are unchanged. Hosted providers remain optional and require separately configured keys; local rendering requires no account. Also updates the agent API and MCP server dependencies (zod 4.6.7, MCP SDK 1.32.2, body-parser 2.4.0) to fix published security advisories.',
