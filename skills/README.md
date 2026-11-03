@@ -23,6 +23,7 @@ curl -H "Authorization: Bearer $HF_API_KEY" https://<api-address>/skills/hyperfr
 | `/hyperframes-server`              | **Read first.** Making a video on this server from any agent: the project model, the tool map from `npx hyperframes <cmd>` to API and MCP calls, the production loop, review and delivery. |
 | `/hyperframes-startos-connect`     | Connecting a client: Claude Code, Codex, Hermes Agent, OpenClaw, Claude.ai, and any streamable-HTTP MCP client. Certificates, Tor, API key handling, troubleshooting.  |
 | `/hyperframes-production-checklist`| The pre-render and pre-delivery gates: lint and check results, frame review, audio, variables, output format, file sizes.                                           |
+| `/hyperframes-voicestudio`         | The server has VoiceStudio installed (`voicestudio_status`) and the video needs narration, word-timed captions, a cloned or designed voice, or a dub. Audio is written straight into the project.                                  |
 | `/hyperframes-launch-references`   | HeyGen's launch films as study material and as four re-brandable templates: what the repository holds, `import_project`, the re-brand recipe, the media license limits. |
 
 ## Upstream skills (served from the service)

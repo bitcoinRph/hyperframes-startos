@@ -1,4 +1,5 @@
 import { setupManifest } from '@start9labs/start-sdk'
+import { i18n } from '../i18n'
 import { long, short } from './i18n'
 
 export const manifest = setupManifest({
@@ -17,5 +18,16 @@ export const manifest = setupManifest({
       arch: ['x86_64', 'aarch64'],
     },
   },
-  dependencies: {},
+  dependencies: {
+    voicestudio: {
+      description: i18n(
+        'Optional. Lets agents narrate, transcribe, clone voices and dub video with VoiceStudio, saving the audio straight into HyperFrames projects.',
+      ),
+      optional: true,
+      metadata: {
+        title: 'VoiceStudio',
+        icon: 'https://raw.githubusercontent.com/debpalash/VoiceStudio/main/docs/logo.svg',
+      },
+    },
+  },
 })

@@ -45,6 +45,15 @@ Studio was built for a desktop screen. On a phone held upright, this package sho
 - **Configure Provider Keys** — optional keys for hosted voices and music (HeyGen), text-to-speech (ElevenLabs), vision descriptions and Gemini voices (Gemini), capture descriptions (OpenRouter) and Figma import. Leave a field empty to skip that provider.
 - **Configure Rendering** — how many Chrome workers a render uses, the low-memory profile for small servers, and how many render jobs run at the same time.
 
+## Voices, captions and dubbing with VoiceStudio (optional)
+
+Install the **VoiceStudio** service (version 0.5.7 or newer) on the same server and restart nothing else: HyperFrames notices it and your agents gain tools to narrate scripts, transcribe speech for captions, clone or design voices and dub videos into other languages. The audio is saved straight into the HyperFrames project and never passes through the agent's chat.
+
+- Install and accept VoiceStudio's models and licences yourself, in VoiceStudio (Models). Agents never install models or accept licences for you; they report what is missing.
+- Only clone a voice you have the right to clone (your own, or with the speaker's permission).
+- Dubbing translates on your server (Argos or NLLB); nothing is sent to a cloud translator. It can take a long time on a CPU.
+- Without VoiceStudio everything else works as before.
+
 ## HeyGen media tools
 
 The package bundles the official HeyGen CLI v0.10.0 for both server architectures. Your agent can check it through `run_cli` with `project` set and `args: ["media-use", "resolve", "--doctor", "--json"]`; the same call is available at `POST /api/v1/cli`. Check the separate executable/version/authentication rows, not just the overall `ok`.

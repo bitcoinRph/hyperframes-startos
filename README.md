@@ -26,6 +26,7 @@
 - [Tasks](#tasks)
 - [Agent API](#agent-api)
 - [MCP Server](#mcp-server)
+- [VoiceStudio Integration](#voicestudio-integration)
 - [Skills Library](#skills-library)
 - [Health Checks](#health-checks)
 - [Backups and Restore](#backups-and-restore)
@@ -83,6 +84,7 @@ The bearer-token API is for trusted agents. Project selection and file APIs reje
 | `/data/home/`                  | The CLI's home: `.hyperframes/` (config), `.cache/hyperframes/` (fonts, browsers, models), `.heygen/` |
 | `/data/startos/studio.json`    | `{ "project": "<name>" }`, the project Studio serves                                        |
 | `/data/startos/jobs/`          | Render job records (`<id>.json`) and logs (`<id>.log`)                                      |
+| `/data/startos/voicestudio-jobs/` | Dub job records (`<id>.json`)                                                            |
 | `/data/store.json`             | Package state (credentials, provider keys, rendering settings)                              |
 
 ## File Models
@@ -157,6 +159,32 @@ Render jobs run through a queue sized by `maxConcurrentRenders`. Records persist
 ## MCP Server
 
 `POST <api>/mcp`, Streamable HTTP, stateless (`sessionIdGenerator: undefined`, JSON responses enabled), built with `@modelcontextprotocol/sdk`. Tools: `server_info doctor list_projects create_project import_project get_project delete_project list_files read_file write_file delete_file fetch_asset lint check snapshot timeline project_info catalog_search catalog_item catalog_add render_video get_render_status list_renders cancel_render studio_status studio_open run_cli list_skills read_skill list_skill_files`. `snapshot` returns PNGs as image content. Resources: `hyperframes://skills/{skill}/{path}` and `hyperframes://server/info`. Tool names shared with HeyGen's hosted connector (`list_projects`, `get_project`, `render_video`, `get_render_status`) keep the same meaning.
+
+## VoiceStudio Integration
+
+VoiceStudio (`voicestudio`, the self-hosted ElevenLabs alternative) is an **optional** dependency (`dependencies.ts`: kind `running`, `versionRange >=0.5.7:0`, no health checks; the manifest marks it `optional: true`). HyperFrames works without it.
+
+When installed, `startos/main.ts` resolves `sdk.host.getBridgeAddress(effects, { packageId: 'voicestudio', hostId: 'main', internalPort: 3900, ssl: false }).const()` and, only for the `server` daemon, mounts VoiceStudio's `public` volume read-only at `/mnt/voicestudio` and sets:
+
+| Env | Value |
+| --- | --- |
+| `VOICESTUDIO_URL` | `http://<bridge address>` (plain HTTP inside the box) |
+| `VOICESTUDIO_KEY_FILE` | `/mnt/voicestudio/credentials.json` (`{ "apiKey": "..." }`) |
+
+When VoiceStudio is absent both are unset (no mount, no placeholder). The `.const()` read restarts the server daemon once when VoiceStudio is installed or removed. Constants are in `startos/utils.ts` and mirror `voicestudio-startos` (`deploy/startos/startos/utils.ts`). The key is re-read on every request (it can be rotated), sent as `Authorization: Bearer`, and never logged or returned. The URL comes from the operator, so `server/src/voicestudio.ts` talks to it with `node:http`, not `util/net.ts`; agents pass only project-relative paths and documented parameters (absolute paths and traversal are refused). No `Origin`/`Sec-Fetch-*` headers are sent (VoiceStudio's cross-site guard rejects them).
+
+| MCP tool | REST | VoiceStudio calls |
+| --- | --- | --- |
+| `voicestudio_status` | `GET /api/v1/voicestudio/status` | `/health`, `/engines/{tts,asr,translation}`, `/models`; answers `configured: false` when absent |
+| `voicestudio_list_voices` | `GET /api/v1/voicestudio/voices` | `/profiles` |
+| `voicestudio_speak` | `POST /api/v1/projects/:p/voicestudio/speak` | `/profiles/{id}` check, `POST /generate` (no 4096-character limit); the WAV response body is streamed to the project |
+| `voicestudio_transcribe` | `POST .../voicestudio/transcribe` | `POST /v1/audio/transcriptions` verbose_json (+ word granularity); writes `*.transcript.json`, `*.transcript.words.json` (`[{id,text,start,end}]`), optional `.srt`/`.vtt` |
+| `voicestudio_clone_voice` | `POST .../voicestudio/clone` | `POST /profiles` (`kind=clone`), optional `/profiles/{id}/attestation` |
+| `voicestudio_design_voice` | `POST /api/v1/voicestudio/design` | `/design/describe`, `POST /profiles` (`kind=design`); refuses unmatched descriptions |
+| `voicestudio_dub` | `POST .../voicestudio/dub` (202) | `/dub/upload`, `/jobs/<task>`, `/dub/transcribe-stream/<job>` (SSE `final`), `/dub/translate`, `/dub/generate/<job>`, `/dub/download`, `/dub/download-audio`, `/dub/srt` |
+| `voicestudio_dub_status`, `voicestudio_dub_cancel` | `GET /api/v1/voicestudio/dubs[/:id]`, `DELETE .../dubs/:id` | `/tasks/cancel/<task>` |
+
+Dub jobs are a separate minimal job type with the same polling shape as renders (`queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`), persisted in `/data/startos/voicestudio-jobs/` and run one at a time (VoiceStudio has a single serial worker). Translation providers are limited to `argos` (default) and `nllb`; VoiceStudio's own default is Google, which is never used. Errors from VoiceStudio are mapped to actionable messages (409 `asr_model_missing`, licence not accepted, `argos_pack_missing`; 503/429 are retried with `Retry-After`, then reported). The server never installs models or accepts licences. Requests use explicit long timeouts (up to 30 minutes for synthesis, hours for dubs). Tests: `server/test/voicestudio.test.ts` against a fake HTTP server.
 
 ## Skills Library
 

@@ -85,6 +85,7 @@ arguments verbatim, no shell; add `--json` where the command supports it.
 | `hyperframes preview`                              | `studio_open` + `studio_status`; give the user the project URL                         |
 | `hyperframes inspect`, `layout`, `validate`, `keyframes`, `audio`, `beats`, `compositions`, `history`, `media-treatment`, `normalize-audio`, `compare`, `grade-compare` | `run_cli` with the same arguments (`audio` measures locally; no hosted provider here) |
 | `hyperframes tts`, `transcribe`, `remove-background`, `media-use resolve`, `capture <url>` | `run_cli`; needs the optional tools or provider keys, check `doctor` first |
+| Narration, word-timed transcripts, voice cloning or design, dubbing (VoiceStudio, if installed) | `voicestudio_status` first, then `voicestudio_speak`, `voicestudio_transcribe`, `voicestudio_clone_voice`, `voicestudio_design_voice`, `voicestudio_dub` + `voicestudio_dub_status` (REST under `/api/v1/voicestudio/` and `/api/v1/projects/<p>/voicestudio/`); read `/hyperframes-voicestudio` |
 | `hyperframes publish`, `cloud`, `lambda`, `cloudrun`, `auth`, `feedback`, `telemetry` | Not available on the server, by design. Download the render instead. |
 | `hyperframes render --docker`                      | Not available (the service is already the container). Omit `--docker`.                |
 | `hyperframes skills update ...`                    | Not needed: the server serves the skills that match its CLI version. Use `read_skill`. |
@@ -137,7 +138,8 @@ steps with the tools above. The server-specific shape:
    `catalog_add` with `vars` holding the brand copy and colors. Do this **before** any
    parallel work.
 3. **Media**: upload or `fetch_asset` the user's footage, images and music into `assets/`.
-   Generate voice with `run_cli ["tts", ...]` only if `doctor` shows Kokoro, or a provider key
+   Generate voice with the `voicestudio_*` tools when `voicestudio_status` says VoiceStudio is
+   ready (`/hyperframes-voicestudio`), else with `run_cli ["tts", ...]` only if `doctor` shows Kokoro, or a provider key
    is configured; otherwise ask the user for narration audio or skip narration.
 4. **Compose**: `write_file` for `index.html` and each `compositions/*.html`. Keep the
    `/hyperframes` contract and `references/format.md`: root `data-composition-id`,

@@ -9,6 +9,11 @@ import {
   mcpPath,
   projectsSubpath,
   studioPort,
+  voicestudioHostId,
+  voicestudioId,
+  voicestudioKeyFile,
+  voicestudioMount,
+  voicestudioPort,
 } from './utils'
 
 const mounts = sdk.Mounts.of().mountVolume({
@@ -41,6 +46,18 @@ export const main = sdk.setupMain(async ({ effects }) =>
           ),
         )
         .const()) ?? []
+
+    // VoiceStudio is optional. `.const()` on the bare address string restarts
+    // this service once when VoiceStudio is installed or removed, and not when
+    // it updates. Absent means absent: no mount, no env, no placeholder.
+    const voicestudioAddress = await sdk.host
+      .getBridgeAddress(effects, {
+        packageId: voicestudioId,
+        hostId: voicestudioHostId,
+        internalPort: voicestudioPort,
+        ssl: false,
+      })
+      .const()
 
     const providers = store?.providers
     const rendering = store?.rendering
@@ -100,7 +117,15 @@ export const main = sdk.setupMain(async ({ effects }) =>
         subcontainer: sdk.SubContainer.of(
           effects,
           { imageId: 'hyperframes' },
-          mounts,
+          voicestudioAddress
+            ? mounts.mountDependency({
+                dependencyId: voicestudioId,
+                volumeId: 'public',
+                subpath: null,
+                mountpoint: voicestudioMount,
+                readonly: true,
+              })
+            : mounts,
           'server',
         ),
         exec: {
@@ -117,6 +142,12 @@ export const main = sdk.setupMain(async ({ effects }) =>
             HF_MAX_CONCURRENT_RENDERS: String(
               rendering?.maxConcurrentRenders ?? 1,
             ),
+            ...(voicestudioAddress
+              ? {
+                  VOICESTUDIO_URL: `http://${voicestudioAddress}`,
+                  VOICESTUDIO_KEY_FILE: voicestudioKeyFile,
+                }
+              : {}),
           },
         },
         ready: {

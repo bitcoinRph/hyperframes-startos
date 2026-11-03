@@ -37,6 +37,21 @@ import { catalogItem, catalogItemTypes } from './catalog.js'
 import { importProject } from './importer.js'
 import { listSkills, readSkillFile, skillFiles } from './skills.js'
 import { openInStudio, studioStatus } from './studio.js'
+import {
+  cancelDub,
+  cloneVoice,
+  designVoice,
+  dubOutputs,
+  getDub,
+  listDubs,
+  listVoices,
+  localProviders,
+  speak,
+  submitDub,
+  timingStrategies,
+  transcribe,
+  voicestudioStatus,
+} from './voicestudio.js'
 import { allowedCliCommands } from './util/cli.js'
 import { ApiError } from './util/errors.js'
 
@@ -78,6 +93,7 @@ export function createMcpServer(): McpServer {
         'Workflow: list_skills and read_skill("hyperframes-server") first, then create_project, write_file (index.html), lint, check, snapshot, and render_video; poll get_render_status until it succeeds.',
         'Upstream HyperFrames skills are served as resources (hyperframes://skills/<name>/SKILL.md). Their `npx hyperframes <cmd>` instructions map to run_cli or to the dedicated tools here.',
         'Studio (the browser editor) shows one project at a time; studio_open switches it and returns the URL for the user.',
+        'Voice: when VoiceStudio is installed on the server, voicestudio_status says so; voicestudio_speak, _transcribe, _clone_voice, _design_voice and _dub write audio straight into the project.',
       ].join('\n'),
     },
   )
@@ -420,6 +436,140 @@ export function createMcpServer(): McpServer {
       inputSchema: { job_id: z.string() },
     },
     async ({ job_id }) => guard(async () => text(jobView(await cancelRender(job_id)))),
+  )
+
+  // ── VoiceStudio (optional; tools answer "not installed" when the service is absent) ──
+  const rel = z.string().describe('Project-relative path')
+  const lang = z.string().max(16).optional().describe('ISO language code such as "en"; omit to let VoiceStudio decide')
+
+  server.registerTool(
+    'voicestudio_status',
+    {
+      title: 'VoiceStudio status',
+      description: 'Is VoiceStudio (self-hosted voice, transcription and dubbing) installed and reachable on this server, and are its speech, transcription and translation models ready? Call before any other voicestudio_ tool.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => guard(async () => text(await voicestudioStatus())),
+  )
+
+  server.registerTool(
+    'voicestudio_list_voices',
+    {
+      title: 'List VoiceStudio voices',
+      description: 'Saved VoiceStudio voice profiles: id, name, language, kind (clone or design). Pass an id as `voice` to voicestudio_speak or voicestudio_dub.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => guard(async () => text(await listVoices())),
+  )
+
+  server.registerTool(
+    'voicestudio_speak',
+    {
+      title: 'Narrate text into the project',
+      description:
+        'Synthesize speech with a VoiceStudio voice and write the WAV straight into the project (default assets/voice/<slug>-<n>.wav). Returns path, duration and size, never audio. Long text is fine (one call, can take minutes on CPU). Then add an <audio id class="clip" data-start data-track-index> element pointing at the path.',
+      inputSchema: {
+        project,
+        text: z.string().min(1).max(200000),
+        voice: z.string().describe('VoiceStudio profile id (voicestudio_list_voices)'),
+        language: lang,
+        speed: z.number().min(0.25).max(4).optional(),
+        output: rel.optional().describe('Destination .wav; default assets/voice/<slug>-<n>.wav'),
+        effect_preset: z.string().max(32).optional().describe('VoiceStudio mastering preset; "raw" disables processing, default is "broadcast"'),
+      },
+    },
+    async (input) => guard(async () => text(await speak(input))),
+  )
+
+  server.registerTool(
+    'voicestudio_transcribe',
+    {
+      title: 'Transcribe project audio or video',
+      description:
+        'Transcribe a project audio/video file with VoiceStudio. Writes the full result next to the input (<input>.transcript.json) and, with words=true, a caption-ready <input>.transcript.words.json ([{id,text,start,end}]); formats adds .srt/.vtt. Returns only a short summary and a text preview, so read the files for caption timing instead of asking for the transcript.',
+      inputSchema: {
+        project,
+        input: rel,
+        language: lang,
+        words: z.boolean().optional().describe('Word-level timestamps (slower alignment pass)'),
+        output: rel.optional().describe('Destination .json; default <input>.transcript.json'),
+        formats: z.array(z.enum(['srt', 'vtt'])).optional(),
+      },
+    },
+    async (input) => guard(async () => text(await transcribe(input))),
+  )
+
+  server.registerTool(
+    'voicestudio_clone_voice',
+    {
+      title: 'Clone a voice',
+      description:
+        'Create a VoiceStudio voice profile from a project reference recording (5-30 s, one speaker). Only clone a voice the owner has the right to clone: their own, or one whose speaker gave permission; pass `consent` to record which in VoiceStudio. Returns the profile id.',
+      inputSchema: {
+        project,
+        reference: rel,
+        name: z.string().min(1).max(120),
+        language: lang,
+        reference_text: z.string().max(4000).optional().describe('Exact words in the recording; omit to let VoiceStudio transcribe it'),
+        consent: z.enum(['own_voice', 'speaker_permission']).optional(),
+      },
+    },
+    async (input) => guard(async () => text(await cloneVoice(input))),
+  )
+
+  server.registerTool(
+    'voicestudio_design_voice',
+    {
+      title: 'Design a voice from a description',
+      description:
+        'Create a voice profile from words such as "elderly female, low pitch, british accent". VoiceStudio maps only gender, age, pitch, whisper style and English accents or Chinese dialects; a description that maps to nothing is refused with the unmatched words.',
+      inputSchema: { description: z.string().min(1).max(2000), name: z.string().min(1).max(120), language: lang },
+    },
+    async (input) => guard(async () => text(await designVoice(input))),
+  )
+
+  server.registerTool(
+    'voicestudio_dub',
+    {
+      title: 'Dub a project video or audio into another language',
+      description:
+        'Queue a dub: transcribe, translate (local providers only), re-voice and write results into the project (default assets/dub/<name>.<lang>.mp4|wav|srt). voice "clone-original" keeps each original speaker; or give a profile id. Returns a job id at once; poll voicestudio_dub_status (minutes to hours on CPU). Needs ASR, translation and TTS models installed and licences accepted by the owner in VoiceStudio.',
+      inputSchema: {
+        project,
+        input: rel.describe('Project-relative video or audio file'),
+        target_language: z.string().max(16),
+        translation_provider: z.enum(localProviders).optional().describe('Default argos (needs its language pack); nllb is heavier'),
+        voice: z.string().optional().describe('"clone-original" (default) or a VoiceStudio profile id'),
+        outputs: z.array(z.enum(dubOutputs)).optional().describe('video (MP4), audio (WAV mix) and/or srt; default video+srt for video input, audio+srt for audio'),
+        source_language: lang,
+        output_dir: rel.optional().describe('Default assets/dub'),
+        timing_strategy: z.enum(timingStrategies).optional().describe('Default smart_fit; concise fails when the translation overflows its slot'),
+      },
+    },
+    async (input) => guard(async () => text(await submitDub(input))),
+  )
+
+  server.registerTool(
+    'voicestudio_dub_status',
+    {
+      title: 'Dub job status',
+      description: 'Status, stage, warnings and finished output paths of a dub job; omit job_id to list recent dubs.',
+      inputSchema: { job_id: z.string().optional(), project: project.optional() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ job_id, project: name }) => guard(async () => text(job_id ? getDub(job_id) : listDubs(name))),
+  )
+
+  server.registerTool(
+    'voicestudio_dub_cancel',
+    {
+      title: 'Cancel a dub job',
+      description: 'Cancel a queued or running dub job (also asks VoiceStudio to stop).',
+      inputSchema: { job_id: z.string() },
+    },
+    async ({ job_id }) => guard(async () => text(await cancelDub(job_id))),
   )
 
   server.registerTool(

@@ -57,6 +57,7 @@ export default {
     52: 'Elige qué proyecto sirve la interfaz de Studio. Solo se reinicia Studio.',
     53: 'Establece la contraseña de Studio antes de abrir la interfaz web',
     54: 'Establece una clave de API para que tus agentes puedan conectarse por API y MCP',
+    55: 'Opcional. Permite a los agentes narrar, transcribir, clonar voces y doblar video con VoiceStudio, guardando el audio directamente en los proyectos de HyperFrames.',
   },
   de_DE: {
     0: 'Studio',
@@ -114,6 +115,7 @@ export default {
     52: 'Wähle, welches Projekt die Studio-Schnittstelle bereitstellt. Nur Studio startet neu.',
     53: 'Setze das Studio-Passwort, bevor du die Weboberfläche öffnest',
     54: 'Setze einen API-Schlüssel, damit sich deine Agenten über API und MCP verbinden können',
+    55: 'Optional. Ermöglicht Agenten, mit VoiceStudio zu vertonen, zu transkribieren, Stimmen zu klonen und Videos zu synchronisieren; das Audio landet direkt in den HyperFrames-Projekten.',
   },
   pl_PL: {
     0: 'Studio',
@@ -171,6 +173,7 @@ export default {
     52: 'Wybierz, który projekt udostępnia interfejs Studio. Ponownie uruchamia się tylko Studio.',
     53: 'Ustaw hasło Studio przed otwarciem interfejsu webowego',
     54: 'Ustaw klucz API, aby twoi agenci mogli łączyć się przez API i MCP',
+    55: 'Opcjonalne. Pozwala agentom lektorować, transkrybować, klonować głosy i dubbingować wideo za pomocą VoiceStudio, zapisując dźwięk bezpośrednio w projektach HyperFrames.',
   },
   fr_FR: {
     0: 'Studio',
@@ -228,5 +231,6 @@ export default {
     52: "Choisissez le projet servi par l'interface Studio. Seul Studio redémarre.",
     53: "Définissez le mot de passe de Studio avant d'ouvrir l'interface web",
     54: "Définissez une clé d'API pour que vos agents puissent se connecter via l'API et MCP",
+    55: 'Facultatif. Permet aux agents de narrer, transcrire, cloner des voix et doubler des vidéos avec VoiceStudio, en enregistrant l’audio directement dans les projets HyperFrames.',
   },
 } satisfies Record<string, LangDict>

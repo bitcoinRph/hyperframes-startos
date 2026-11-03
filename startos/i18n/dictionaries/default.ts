@@ -71,6 +71,9 @@ const dict = {
   // init/watchCredentials.ts
   'Set the Studio password before opening the web interface': 53,
   'Set an API key so your agents can connect over the API and MCP': 54,
+
+  // manifest/index.ts
+  'Optional. Lets agents narrate, transcribe, clone voices and dub video with VoiceStudio, saving the audio straight into HyperFrames projects.': 55,
 } as const
 
 /**
