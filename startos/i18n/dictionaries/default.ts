@@ -74,6 +74,10 @@ const dict = {
 
   // manifest/index.ts
   'Optional. Lets agents narrate, transcribe, clone voices and dub video with VoiceStudio, saving the audio straight into HyperFrames projects.': 55,
+  'VoiceStudio Dubbing': 56,
+  'Choose whether agents may use LLM translation when dubbing with VoiceStudio. The agent API restarts to apply it.': 57,
+  'Allow LLM translation': 58,
+  'When on, agents may send dub transcripts to the LLM provider configured in VoiceStudio, which may be a cloud service. A local LLM keeps the text on this server. When off, dubbing translates only with the Argos or NLLB models on this server.': 59,
 } as const
 
 /**

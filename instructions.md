@@ -43,6 +43,7 @@ Studio was built for a desktop screen. On a phone held upright, this package sho
 - **Set API Key** — makes a new API key and shows it once. Running it again replaces the old one, and every connected agent must be updated.
 - **Open Project in Studio** — choose the project Studio serves.
 - **Configure Provider Keys** — optional keys for hosted voices and music (HeyGen), text-to-speech (ElevenLabs), vision descriptions and Gemini voices (Gemini), capture descriptions (OpenRouter) and Figma import. Leave a field empty to skip that provider.
+- **VoiceStudio Dubbing** — one switch, **Allow LLM translation**, off by default. When on, agents may translate dubs with the LLM you set up in VoiceStudio (better wording, regional dialects, style notes). Set up the LLM first in the VoiceStudio Web UI under Settings, LLM Providers. If that LLM is a cloud service, the dub transcript is sent to it; a local LLM (for example Ollama on this server) keeps the text private. Off means only the on-server Argos and NLLB models translate.
 - **Configure Rendering** — how many Chrome workers a render uses, the low-memory profile for small servers, and how many render jobs run at the same time.
 
 ## Voices, captions and dubbing with VoiceStudio (optional)
@@ -51,7 +52,7 @@ Install the **VoiceStudio** service (version 0.5.7 or newer) on the same server 
 
 - Install and accept VoiceStudio's models and licences yourself, in VoiceStudio (Models). Agents never install models or accept licences for you; they report what is missing.
 - Only clone a voice you have the right to clone (your own, or with the speaker's permission).
-- Dubbing translates on your server (Argos or NLLB); nothing is sent to a cloud translator. It can take a long time on a CPU.
+- Dubbing translates on your server (Argos or NLLB) by default; nothing is sent to a cloud translator. LLM translation is available only if you turn on **VoiceStudio Dubbing → Allow LLM translation**. It can take a long time on a CPU.
 - Without VoiceStudio everything else works as before.
 
 ## HeyGen media tools

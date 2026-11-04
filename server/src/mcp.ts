@@ -45,7 +45,8 @@ import {
   getDub,
   listDubs,
   listVoices,
-  localProviders,
+  translationProviders,
+  translationQualities,
   speak,
   submitDub,
   timingStrategies,
@@ -446,7 +447,7 @@ export function createMcpServer(): McpServer {
     'voicestudio_status',
     {
       title: 'VoiceStudio status',
-      description: 'Is VoiceStudio (self-hosted voice, transcription and dubbing) installed and reachable on this server, and are its speech, transcription and translation models ready? Call before any other voicestudio_ tool.',
+      description: 'Is VoiceStudio (self-hosted voice, transcription and dubbing) installed and reachable on this server, and are its speech, transcription and translation models ready? Also reports llm_translation_allowed, the owner opt-in for LLM dub translation. Call before any other voicestudio_ tool.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -535,12 +536,17 @@ export function createMcpServer(): McpServer {
     {
       title: 'Dub a project video or audio into another language',
       description:
-        'Queue a dub: transcribe, translate (local providers only), re-voice and write results into the project (default assets/dub/<name>.<lang>.mp4|wav|srt). voice "clone-original" keeps each original speaker; or give a profile id. Returns a job id at once; poll voicestudio_dub_status (minutes to hours on CPU). Needs ASR, translation and TTS models installed and licences accepted by the owner in VoiceStudio.',
+        'Queue a dub: transcribe, translate (argos or nllb on the server by default), re-voice and write results into the project (default assets/dub/<name>.<lang>.mp4|wav|srt). voice "clone-original" keeps each original speaker; or give a profile id. Returns a job id at once; poll voicestudio_dub_status (minutes to hours on CPU). Needs ASR, translation and TTS models installed and licences accepted by the owner in VoiceStudio. LLM translation (translation_provider "llm", or translation_quality "cinematic"/"autofit") gives better, dialect-aware wording but sends the transcript text to the LLM the owner configured in VoiceStudio, which may be a cloud service; it is refused unless voicestudio_status reports llm_translation_allowed true (the owner enables it in the "VoiceStudio Dubbing" action; never ask to bypass it). reflect adds 2 LLM calls per segment.',
       inputSchema: {
         project,
         input: rel.describe('Project-relative video or audio file'),
         target_language: z.string().max(16),
-        translation_provider: z.enum(localProviders).optional().describe('Default argos (needs its language pack); nllb is heavier'),
+        translation_provider: z.enum(translationProviders).optional().describe('Default argos (needs its language pack); nllb is heavier; llm uses the LLM configured in VoiceStudio and is owner-gated'),
+        translation_quality: z.enum(translationQualities).optional().describe('Default fast. cinematic and autofit add an LLM refine pass and are owner-gated like llm'),
+        dialect: z.string().max(16).optional().describe('BCP-47 regional variant such as "es-AR"; only LLM paths honour it'),
+        translation_instructions: z.string().max(5000).optional().describe('Free-text style guidance for the LLM translator'),
+        reflect: z.boolean().optional().describe('LLM critique-and-rewrite polish; 2 extra LLM calls per segment (slow, costly)'),
+        auto_glossary: z.boolean().optional().describe('Let the LLM extract a terminology glossary first (llm provider)'),
         voice: z.string().optional().describe('"clone-original" (default) or a VoiceStudio profile id'),
         outputs: z.array(z.enum(dubOutputs)).optional().describe('video (MP4), audio (WAV mix) and/or srt; default video+srt for video input, audio+srt for audio'),
         source_language: lang,

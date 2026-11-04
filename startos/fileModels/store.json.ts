@@ -20,6 +20,11 @@ const renderingShape = z.object({
   maxConcurrentRenders: z.number().int().min(1).max(4).catch(1),
 })
 
+const voicestudioShape = z.object({
+  // Owner opt-in: agents may send dub transcripts to the LLM configured in VoiceStudio, which may be a cloud service.
+  allowLlmTranslation: z.boolean().catch(false),
+})
+
 const shape = z.object({
   // Bearer token for the agent API and MCP endpoint; set by the set-api-key action.
   apiKey: z.string().optional().catch(undefined),
@@ -27,6 +32,7 @@ const shape = z.object({
   studioPassword: z.string().optional().catch(undefined),
   providers: providersShape.catch(() => providersShape.parse({})),
   rendering: renderingShape.catch(() => renderingShape.parse({})),
+  voicestudio: voicestudioShape.catch(() => voicestudioShape.parse({})),
 })
 
 export type Store = z.infer<typeof shape>

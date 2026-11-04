@@ -1,5 +1,5 @@
 import { renderFormats, renderQualities, renderResolutions } from './jobs.js'
-import { dubOutputs, localProviders, timingStrategies } from './voicestudio.js'
+import { dubOutputs, timingStrategies, translationProviders, translationQualities } from './voicestudio.js'
 import { resolutions } from './projects.js'
 import { allowedCliCommands } from './util/cli.js'
 
@@ -265,7 +265,7 @@ export function openapi(serverUrls: string[]) {
       '/api/v1/projects/{project}/voicestudio/dub': {
         parameters: [projectParam],
         post: {
-          summary: 'Queue a dub (transcribe, translate locally, re-voice); returns a job immediately',
+          summary: 'Queue a dub (transcribe, translate, re-voice; LLM translation is owner-gated); returns a job immediately',
           requestBody: {
             required: true,
             content: json({
@@ -274,7 +274,12 @@ export function openapi(serverUrls: string[]) {
               properties: {
                 input: { type: 'string' },
                 target_language: { type: 'string' },
-                translation_provider: { type: 'string', enum: [...localProviders], default: 'argos' },
+                translation_provider: { type: 'string', enum: [...translationProviders], default: 'argos', description: 'llm uses the LLM configured in VoiceStudio; refused (403) unless the owner enabled "Allow LLM translation"' },
+                translation_quality: { type: 'string', enum: [...translationQualities], default: 'fast', description: 'cinematic and autofit add an LLM refine pass and are owner-gated like llm' },
+                dialect: { type: 'string', description: 'BCP-47 such as es-AR; LLM paths only' },
+                translation_instructions: { type: 'string', maxLength: 5000 },
+                reflect: { type: 'boolean', description: '2 extra LLM calls per segment' },
+                auto_glossary: { type: 'boolean' },
                 voice: { type: 'string', default: 'clone-original' },
                 outputs: { type: 'array', items: { type: 'string', enum: [...dubOutputs] } },
                 source_language: { type: 'string' },

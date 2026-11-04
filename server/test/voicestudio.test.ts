@@ -15,6 +15,7 @@ process.env.HF_API_KEY = 'vs-test-only'
 process.env.VOICESTUDIO_POLL_MS = '20'
 delete process.env.VOICESTUDIO_URL
 delete process.env.VOICESTUDIO_KEY_FILE
+delete process.env.VOICESTUDIO_ALLOW_LLM_TRANSLATION
 
 const vs = await import('../src/voicestudio.ts')
 const { createApp } = await import('../src/api.ts')
@@ -41,6 +42,8 @@ const seen: { method: string; path: string; auth: string | undefined; origin: st
 let mode: 'ok' | 'asr-missing' | 'busy' = 'ok'
 let busyCount = 0
 let providerSeen = ''
+let translateBody: Record<string, unknown> = {}
+let translateMode: 'ok' | 'no-llm' | 'skipped' = 'ok'
 let dubPollsLeft = 2
 
 const server = http.createServer(async (req, res) => {
@@ -97,7 +100,9 @@ const server = http.createServer(async (req, res) => {
   if (p === '/dub/translate') {
     const j = JSON.parse(body)
     providerSeen = j.provider
-    return send(200, { translated: [{ id: 's1', text: 'hola' }] })
+    translateBody = j
+    if (translateMode === 'no-llm') return send(400, { error: 'The LLM translation engine has no provider configured. Add and test one in Settings → LLM Providers.' })
+    return send(200, { translated: [{ id: 's1', text: 'hola' }], ...(translateMode === 'skipped' ? { cinematic_skipped: 'no-llm-configured' } : {}) })
   }
   if (p === '/dub/generate/j1') {
     const j = JSON.parse(body)
@@ -239,4 +244,57 @@ test('dub job runs the pipeline, writes outputs, rejects cloud providers', async
   assert.deepEqual(done.outputs.map((o) => o.path), ['assets/dub/in.es.mp4', 'assets/dub/in.es.wav', 'assets/dub/in.es.srt'])
   assert.equal(await readFile(join(projects, 'demo', 'assets/dub/in.es.mp4'), 'utf8'), 'MP4DATA')
   assert.equal(vs.listDubs('demo')[0].id, job.id)
+})
+
+const waitDub = async (id: string) => {
+  for (let i = 0; i < 200 && !['succeeded', 'failed', 'cancelled'].includes(vs.getDub(id).status); i++) await new Promise((r) => setTimeout(r, 25))
+  return vs.getDub(id)
+}
+
+test('LLM translation is refused without the owner opt-in, before any upload', async () => {
+  connect()
+  delete process.env.VOICESTUDIO_ALLOW_LLM_TRANSLATION
+  const before = seen.length
+  for (const extra of [{ translation_provider: 'llm' }, { translation_quality: 'cinematic' }, { translation_provider: 'argos', translation_quality: 'autofit' }] as const) {
+    await assert.rejects(vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', ...extra } as never), /Allow LLM translation/)
+  }
+  assert.equal(seen.length, before, 'no request reached VoiceStudio')
+  await assert.rejects(vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', translation_provider: 'deepl' as never }), /not allowed/)
+  assert.equal(((await vs.voicestudioStatus()) as any).llm_translation_allowed, false)
+})
+
+test('with the opt-in, llm maps to provider openai and forwards quality, dialect and options', async () => {
+  connect()
+  process.env.VOICESTUDIO_ALLOW_LLM_TRANSLATION = '1'
+  try {
+    assert.equal(((await vs.voicestudioStatus()) as any).llm_translation_allowed, true)
+    await assert.rejects(vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', translation_provider: 'llm', dialect: 'not a tag' }), /dialect/)
+    const job = await vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', outputs: ['srt'], translation_provider: 'llm', translation_quality: 'cinematic', dialect: 'es-AR', translation_instructions: 'informal', reflect: true, auto_glossary: false })
+    assert.equal((await waitDub(job.id)).status, 'succeeded')
+    assert.equal(translateBody.provider, 'openai')
+    assert.equal(translateBody.quality, 'cinematic')
+    assert.equal(translateBody.dialect, 'es-AR')
+    assert.equal(translateBody.translation_instructions, 'informal')
+    assert.equal(translateBody.reflect, true)
+    assert.equal(translateBody.auto_glossary, false)
+    // A plain argos dub forwards none of the optional fields.
+    const plain = await vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', outputs: ['srt'] })
+    await waitDub(plain.id)
+    assert.equal(translateBody.provider, 'argos')
+    assert.equal(translateBody.quality, 'fast')
+    for (const k of ['dialect', 'translation_instructions', 'reflect', 'auto_glossary']) assert.equal(k in translateBody, false, k)
+
+    translateMode = 'skipped'
+    const skipped = await waitDub((await vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', outputs: ['srt'], translation_quality: 'autofit' })).id)
+    assert.equal(skipped.status, 'succeeded')
+    assert.ok(skipped.warnings.some((w) => /no-llm-configured/.test(w)), skipped.warnings.join('|'))
+
+    translateMode = 'no-llm'
+    const failed = await waitDub((await vs.submitDub({ project: 'demo', input: 'assets/in.mp4', target_language: 'es', outputs: ['srt'], translation_provider: 'llm' })).id)
+    assert.equal(failed.status, 'failed')
+    assert.match(failed.error ?? '', /no LLM provider configured/)
+  } finally {
+    translateMode = 'ok'
+    delete process.env.VOICESTUDIO_ALLOW_LLM_TRANSLATION
+  }
 })

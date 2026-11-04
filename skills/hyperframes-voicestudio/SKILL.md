@@ -56,12 +56,14 @@ Latency: the first request after VoiceStudio starts loads a model and may take m
 `voicestudio_dub` takes a project video (or audio) and returns a **job id** at once.
 
 - `target_language` (ISO code), optional `source_language` if detection fails.
-- `translation_provider`: `argos` (default, fast, needs a language pack per pair) or `nllb` (heavier, better). Only local translators are allowed; the text never goes to a cloud service.
+- `translation_provider`: `argos` (default, fast, needs a language pack per pair), `nllb` (heavier, better) or `llm`. `argos` and `nllb` run on the server and the text never leaves it. Cloud translators (google, deepl) are never allowed.
+- **LLM translation is owner-gated.** `llm`, and `translation_quality` `cinematic` or `autofit` (an LLM refine pass on top of any provider), use the LLM the owner configured inside VoiceStudio. That may be a cloud service, so the transcript text can leave the server (a local LLM keeps it). They work only when `voicestudio_status` reports `llm_translation_allowed: true`; otherwise the call is refused before anything is uploaded. Do not retry, work around it or ask the owner to bypass it: tell the owner that "Allow LLM translation" is in the HyperFrames "VoiceStudio Dubbing" action and that an LLM provider must be set up in the VoiceStudio Web UI (Settings, LLM Providers). Say plainly that the transcript may go to a cloud service before the owner decides.
+- LLM-only options, sent only when you pass them: `dialect` (BCP-47, e.g. `es-AR`), `translation_instructions` (style guidance, up to 5000 characters), `auto_glossary`, and `reflect` (a critique-and-rewrite polish that adds 2 LLM calls per segment: slow and, on a paid cloud LLM, costly; use it only when asked).
 - `voice`: `clone-original` (default) re-voices each original speaker; or a profile id for a single voice.
 - `outputs`: any of `video` (dubbed MP4), `audio` (dubbed WAV mix with the original background), `srt`. Written to `assets/dub/<name>.<lang>.mp4|wav|srt` unless `output_dir` is set.
 - `timing_strategy`: `smart_fit` (default) tolerates longer translations; `concise` fails when a line overflows its slot; `stretch_video` lengthens the video to fit the speech.
 
-Poll `voicestudio_dub_status` (`GET /api/v1/voicestudio/dubs/<id>`) every 30-60 seconds. `stage` moves upload, prep, transcribe, translate, generate, download. Terminal states are `succeeded`, `failed`, `cancelled`, `interrupted` (the service restarted: resubmit). Read `warnings`: lines that could not be translated, or speakers whose voice could not be extracted. `voicestudio_dub_cancel` stops a job. Dubs run one at a time, and a dub of a few minutes of video can take much longer than the video on CPU. Tell the owner the expected wait; do not resubmit because it is slow.
+Poll `voicestudio_dub_status` (`GET /api/v1/voicestudio/dubs/<id>`) every 30-60 seconds. `stage` moves upload, prep, transcribe, translate, generate, download. Terminal states are `succeeded`, `failed`, `cancelled`, `interrupted` (the service restarted: resubmit). Read `warnings`: lines that could not be translated, an LLM refine pass that was skipped because VoiceStudio has no LLM configured (the plain translation was kept), or speakers whose voice could not be extracted. `voicestudio_dub_cancel` stops a job. Dubs run one at a time, and a dub of a few minutes of video can take much longer than the video on CPU. Tell the owner the expected wait; do not resubmit because it is slow.
 
 Use the dubbed MP4 as footage in a composition (`<video ... data-has-audio="true">`) or the WAV as an `<audio>` clip over muted footage.
 
@@ -80,6 +82,8 @@ Use the dubbed MP4 as footage in a composition (`<video ... data-has-audio="true
 | `no speech-recognition (ASR) model installed` (409) | Owner must install an ASR model in VoiceStudio. The message names the recommended one. |
 | `needs its model licence accepted` (409) | Owner must read and accept it in VoiceStudio. |
 | `Argos translation language pack is not installed` (409) | Owner installs the pack, or retry with `nllb` if installed. |
+| `LLM translation ... is switched off` (403) | The owner has not enabled "Allow LLM translation". Use `argos` or `nllb` with quality `fast`, or ask the owner; never try to bypass. |
+| `no LLM provider configured` (409) | Owner must add an LLM provider in the VoiceStudio Web UI, or you retry with `argos`/`nllb`. |
 | `busy or still loading a model` (503) | Retry in a minute. |
 | `not a VoiceStudio profile` | Use an id from `voicestudio_list_voices`. |
 | `path ... escapes` / `project-relative` | Use project-relative paths only. |

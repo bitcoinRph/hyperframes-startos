@@ -61,6 +61,7 @@ export const main = sdk.setupMain(async ({ effects }) =>
 
     const providers = store?.providers
     const rendering = store?.rendering
+    const allowLlmTranslation = store?.voicestudio?.allowLlmTranslation === true
 
     // Env the HyperFrames CLI reads, shared by Studio and the API server.
     const sharedEnv: Record<string, string> = {
@@ -146,6 +147,9 @@ export const main = sdk.setupMain(async ({ effects }) =>
               ? {
                   VOICESTUDIO_URL: `http://${voicestudioAddress}`,
                   VOICESTUDIO_KEY_FILE: voicestudioKeyFile,
+                  ...(allowLlmTranslation
+                    ? { VOICESTUDIO_ALLOW_LLM_TRANSLATION: '1' }
+                    : {}),
                 }
               : {}),
           },

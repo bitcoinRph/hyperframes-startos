@@ -271,6 +271,14 @@ export function vsError(reply: Reply): ApiError {
     const pairs = Array.isArray(payload?.pairs) ? JSON.stringify(payload.pairs) : ''
     return new ApiError(409, `The Argos translation language pack is not installed in VoiceStudio${pairs ? ` for ${pairs}` : ''}. Ask the owner to install that language pack in VoiceStudio, or retry with translation_provider "nllb" if that model is installed.`, details)
   }
+  // dub_translate.py ~680-700 answers 400 {"error": "<friendly text>"} (so `code` carries the text) when provider "openai" has no LLM configured.
+  if (reply.status === 400 && /LLM translation engine/i.test(`${code ?? ''} ${message}`)) {
+    return new ApiError(
+      409,
+      'VoiceStudio has no LLM provider configured for translation (or its "Dub translation" skill is turned off). Ask the owner to add one in the VoiceStudio Web UI under Settings, LLM Providers (and LLM Skills, Dub translation), or retry with translation_provider "argos" or "nllb".',
+      details,
+    )
+  }
   if (code === 'source_language_required') {
     return new ApiError(400, 'VoiceStudio could not detect the source language; pass source_language (an ISO code such as "en").', details)
   }
@@ -396,8 +404,8 @@ async function getJson(path: string, timeoutMs = SHORT): Promise<unknown> {
 type ModelRow = { repo_id: string; role?: string; installed?: boolean; label?: string; license_acceptance?: { required?: boolean; accepted?: boolean; state?: string } }
 
 export async function voicestudioStatus(): Promise<unknown> {
-  if (!voicestudioConfigured()) return { configured: false, reachable: false, message: NOT_INSTALLED }
-  const out: Obj = { configured: true, reachable: false }
+  if (!voicestudioConfigured()) return { configured: false, reachable: false, llm_translation_allowed: false, message: NOT_INSTALLED }
+  const out: Obj = { configured: true, reachable: false, llm_translation_allowed: llmTranslationAllowed() }
   try {
     // /health is public and answers 503 {"status":"starting"} while VoiceStudio boots (main.py).
     const env = requireEnv()
@@ -458,6 +466,7 @@ export async function voicestudioStatus(): Promise<unknown> {
     asr: asrF,
     translation: { active: translation?.active ?? null, localEngines: local, installedModels: nllbModel },
     ready: { speak, transcribe, dub: speak && transcribe && translateReady },
+    llm_translation_allowed: llmTranslationAllowed(),
     note: 'ready is an estimate from VoiceStudio\'s own listings. Argos also needs a language pack per language pair, which is only checked when a dub runs.',
   })
   return out
@@ -723,8 +732,20 @@ export async function designVoice(input: DesignInput): Promise<unknown> {
 
 // ── Dubbing jobs ───────────────────────────────────────────────────────────
 
-/** Providers that run on the server. Cloud providers (google, deepl, ...) are never allowed. */
-export const localProviders = ['argos', 'nllb'] as const
+/**
+ * Providers an agent may name. argos and nllb run on the server. `llm` maps to
+ * VoiceStudio's provider "openai" (TranslateRequest in schemas/requests.py), which
+ * uses whatever LLM the owner configured inside VoiceStudio (dub_translate.py ~645-700).
+ * That LLM may be a cloud service, so it is owner-gated. Cloud MT providers
+ * (google, deepl, ...) are never allowed.
+ */
+export const translationProviders = ['argos', 'nllb', 'llm'] as const
+/** `agent` exists in VoiceStudio but is deliberately not exposed. */
+export const translationQualities = ['fast', 'cinematic', 'autofit'] as const
+const dialectCode = /^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$/
+
+/** Set by the StartOS package only when the owner enabled "Allow LLM translation" in the VoiceStudio Dubbing action. */
+export const llmTranslationAllowed = (): boolean => process.env.VOICESTUDIO_ALLOW_LLM_TRANSLATION === '1'
 export const dubOutputs = ['video', 'audio', 'srt'] as const
 export const timingStrategies = ['concise', 'smart_fit', 'stretch_video', 'strict_slot'] as const
 export type DubOutput = (typeof dubOutputs)[number]
@@ -733,7 +754,12 @@ export type DubInput = {
   project: string
   input: string
   target_language: string
-  translation_provider?: (typeof localProviders)[number]
+  translation_provider?: (typeof translationProviders)[number]
+  translation_quality?: (typeof translationQualities)[number]
+  dialect?: string
+  translation_instructions?: string
+  reflect?: boolean
+  auto_glossary?: boolean
   voice?: string
   outputs?: DubOutput[]
   source_language?: string
@@ -747,7 +773,13 @@ export type DubJob = {
   project: string
   status: JobStatus
   stage: string
-  request: Required<Pick<DubInput, 'input' | 'target_language' | 'translation_provider' | 'voice' | 'outputs' | 'output_dir' | 'timing_strategy'>> & { source_language: string | null }
+  request: Required<Pick<DubInput, 'input' | 'target_language' | 'translation_provider' | 'translation_quality' | 'voice' | 'outputs' | 'output_dir' | 'timing_strategy'>> & {
+    source_language: string | null
+    dialect?: string
+    translation_instructions?: string
+    reflect?: boolean
+    auto_glossary?: boolean
+  }
   outputs: { kind: DubOutput; path: string; size: number }[]
   warnings: string[]
   voicestudio: { jobId: string | null; taskId: string | null }
@@ -798,7 +830,20 @@ export async function submitDub(input: DubInput): Promise<DubJob> {
   const target = lang(input.target_language, 'target_language', false) as string
   if (target.toLowerCase() === 'auto') throw badRequest('target_language must be a concrete language code')
   const provider = input.translation_provider ?? 'argos'
-  if (!localProviders.includes(provider)) throw badRequest(`translation_provider must be one of ${localProviders.join(', ')}; cloud providers are not allowed because they send the text to third parties`)
+  if (!translationProviders.includes(provider)) throw badRequest(`translation_provider must be one of ${translationProviders.join(', ')}; cloud providers such as google or deepl are not allowed because they send the text to third parties`)
+  const quality = input.translation_quality ?? 'fast'
+  if (!translationQualities.includes(quality)) throw badRequest(`translation_quality must be one of ${translationQualities.join(', ')}`)
+  if (input.dialect !== undefined && (typeof input.dialect !== 'string' || !dialectCode.test(input.dialect))) throw badRequest('dialect must be a BCP-47 tag such as "es-AR" or "pt-BR"')
+  if (input.translation_instructions !== undefined && (typeof input.translation_instructions !== 'string' || input.translation_instructions.length > 5000)) throw badRequest('translation_instructions must be a string of at most 5000 characters')
+  for (const f of ['reflect', 'auto_glossary'] as const) if (input[f] !== undefined && typeof input[f] !== 'boolean') throw badRequest(`${f} must be true or false`)
+  // LLM paths may send the transcript to a cloud LLM; only the owner can allow that. Refuse before anything is uploaded.
+  if ((provider === 'llm' || quality !== 'fast') && !llmTranslationAllowed()) {
+    throw new ApiError(
+      403,
+      'LLM translation (translation_provider "llm", or translation_quality "cinematic" or "autofit") is switched off. It can send the dub transcript to the LLM provider configured in VoiceStudio, which may be a cloud service. The owner must turn on "Allow LLM translation" in the HyperFrames "VoiceStudio Dubbing" action and configure an LLM provider in the VoiceStudio Web UI. Do not ask to bypass this; use translation_provider "argos" or "nllb" with quality "fast" meanwhile.',
+      { voicestudio: { code: 'llm_translation_disabled' } },
+    )
+  }
   const outputs = [...new Set(input.outputs ?? (isVideo ? ['video', 'srt'] : ['audio', 'srt']))] as DubOutput[]
   if (!outputs.length || outputs.some((o) => !dubOutputs.includes(o))) throw badRequest(`outputs may contain ${dubOutputs.join(', ')}`)
   if (outputs.includes('video') && !isVideo) throw badRequest('a dubbed video needs a video input; ask for "audio" instead')
@@ -817,7 +862,18 @@ export async function submitDub(input: DubInput): Promise<DubJob> {
     project: input.project,
     status: 'queued',
     stage: 'queued',
-    request: { input: input.input, target_language: target, translation_provider: provider, voice, outputs, output_dir: outputDir, timing_strategy: strategy, source_language: sourceLanguage },
+    request: { input: input.input, target_language: target, translation_provider: provider,
+      translation_quality: quality,
+      voice,
+      outputs,
+      output_dir: outputDir,
+      timing_strategy: strategy,
+      source_language: sourceLanguage,
+      ...(input.dialect !== undefined ? { dialect: input.dialect } : {}),
+      ...(input.translation_instructions !== undefined ? { translation_instructions: input.translation_instructions } : {}),
+      ...(input.reflect !== undefined ? { reflect: input.reflect } : {}),
+      ...(input.auto_glossary !== undefined ? { auto_glossary: input.auto_glossary } : {}),
+    },
     outputs: [],
     warnings: [],
     voicestudio: { jobId: null, taskId: null },
@@ -980,8 +1036,12 @@ async function runDub(job: DubJob): Promise<void> {
           job_id: vsJob,
           target_lang: target,
           ...(sourceLang ? { source_lang: sourceLang } : {}),
-          provider: req.translation_provider,
-          quality: 'fast',
+          provider: req.translation_provider === 'llm' ? 'openai' : req.translation_provider,
+          quality: req.translation_quality,
+          ...(req.dialect !== undefined ? { dialect: req.dialect } : {}),
+          ...(req.translation_instructions !== undefined ? { translation_instructions: req.translation_instructions } : {}),
+          ...(req.reflect !== undefined ? { reflect: req.reflect } : {}),
+          ...(req.auto_glossary !== undefined ? { auto_glossary: req.auto_glossary } : {}),
           segments: source.map((s) => ({ id: s.id, text: String(s.text ?? ''), start: s.start, end: s.end })),
         },
       }),
@@ -989,6 +1049,8 @@ async function runDub(job: DubJob): Promise<void> {
     const translated = new Map<string, Obj>()
     for (const t of (Array.isArray(tr.translated) ? tr.translated : []).filter(isObj)) translated.set(String(t.id), t)
     const failed = source.filter((s) => translated.get(String(s.id))?.error || !translated.has(String(s.id))).length
+    // `cinematic_skipped` (dub_translate.py _maybe_cinematic ~1321): no LLM is configured, the fast result was kept.
+    if (typeof tr.cinematic_skipped === 'string') job.warnings.push(`the LLM refine pass was skipped (${tr.cinematic_skipped}); the plain translation was kept. The owner can configure an LLM provider in the VoiceStudio Web UI`)
     if (failed === source.length) throw new ApiError(502, 'VoiceStudio could not translate any segment')
     if (failed) job.warnings.push(`${failed} of ${source.length} segments could not be translated and keep the source text`)
     const noVoice = voiceId === null ? source.filter((s) => !s.profile_id).length : 0

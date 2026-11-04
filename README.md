@@ -91,7 +91,7 @@ The bearer-token API is for trusted agents. Project selection and file APIs reje
 
 | File                         | Shape                                                                                                                                              |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `store.json`                 | `apiKey?`, `studioPassword?`, `providers { heygenApiKey, elevenlabsApiKey, geminiApiKey, openrouterApiKey, figmaToken }`, `rendering { workers, lowMemoryMode, maxConcurrentRenders }` |
+| `store.json`                 | `apiKey?`, `studioPassword?`, `providers { heygenApiKey, elevenlabsApiKey, geminiApiKey, openrouterApiKey, figmaToken }`, `rendering { workers, lowMemoryMode, maxConcurrentRenders }`, `voicestudio { allowLlmTranslation }` (default `false`) |
 | `startos/studio.json`        | `project` (string). Written by the **Open Project in Studio** action and by the API server; `main.ts` reads it with `.const()`                    |
 
 ## Network Access and Interfaces
@@ -119,6 +119,7 @@ Studio has no authentication of its own, so the proxy gate is what protects it. 
 | Set API Key                  | `set-api-key`          | none  | Generates a 48-character key, stores it, returns it with the MCP path. Restarts the server daemon (the key is passed as `HF_API_KEY`).   |
 | Open Project in Studio       | `open-studio-project`  | select | Lists directories under `projects/` with an `index.html`; writes `studio.json`; only Studio restarts.                                 |
 | Configure Provider Keys      | `configure-providers`  | form  | Optional masked fields → `HEYGEN_API_KEY`, `ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `FIGMA_TOKEN`.               |
+| VoiceStudio Dubbing          | `configure-voicestudio` | form  | `allowLlmTranslation` toggle (default off) → `VOICESTUDIO_ALLOW_LLM_TRANSLATION=1` on the server daemon, only while VoiceStudio is connected. |
 | Configure Rendering          | `configure-rendering`  | form  | `workers` (auto/1/2/4/8 → `--workers`), `lowMemoryMode` (auto/on/off → `PRODUCER_LOW_MEMORY_MODE`), `maxConcurrentRenders` (1-4).     |
 
 ## Tasks
@@ -170,6 +171,7 @@ When installed, `startos/main.ts` resolves `sdk.host.getBridgeAddress(effects, {
 | --- | --- |
 | `VOICESTUDIO_URL` | `http://<bridge address>` (plain HTTP inside the box) |
 | `VOICESTUDIO_KEY_FILE` | `/mnt/voicestudio/credentials.json` (`{ "apiKey": "..." }`) |
+| `VOICESTUDIO_ALLOW_LLM_TRANSLATION` | `1` only when VoiceStudio is connected and the owner turned on **VoiceStudio Dubbing → Allow LLM translation** (`store.json` `voicestudio.allowLlmTranslation`); unset otherwise |
 
 When VoiceStudio is absent both are unset (no mount, no placeholder). The `.const()` read restarts the server daemon once when VoiceStudio is installed or removed. Constants are in `startos/utils.ts` and mirror `voicestudio-startos` (`deploy/startos/startos/utils.ts`). The key is re-read on every request (it can be rotated), sent as `Authorization: Bearer`, and never logged or returned. The URL comes from the operator, so `server/src/voicestudio.ts` talks to it with `node:http`, not `util/net.ts`; agents pass only project-relative paths and documented parameters (absolute paths and traversal are refused). No `Origin`/`Sec-Fetch-*` headers are sent (VoiceStudio's cross-site guard rejects them).
 
@@ -184,7 +186,7 @@ When VoiceStudio is absent both are unset (no mount, no placeholder). The `.cons
 | `voicestudio_dub` | `POST .../voicestudio/dub` (202) | `/dub/upload`, `/jobs/<task>`, `/dub/transcribe-stream/<job>` (SSE `final`), `/dub/translate`, `/dub/generate/<job>`, `/dub/download`, `/dub/download-audio`, `/dub/srt` |
 | `voicestudio_dub_status`, `voicestudio_dub_cancel` | `GET /api/v1/voicestudio/dubs[/:id]`, `DELETE .../dubs/:id` | `/tasks/cancel/<task>` |
 
-Dub jobs are a separate minimal job type with the same polling shape as renders (`queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`), persisted in `/data/startos/voicestudio-jobs/` and run one at a time (VoiceStudio has a single serial worker). Translation providers are limited to `argos` (default) and `nllb`; VoiceStudio's own default is Google, which is never used. Errors from VoiceStudio are mapped to actionable messages (409 `asr_model_missing`, licence not accepted, `argos_pack_missing`; 503/429 are retried with `Retry-After`, then reported). The server never installs models or accepts licences. Requests use explicit long timeouts (up to 30 minutes for synthesis, hours for dubs). Tests: `server/test/voicestudio.test.ts` against a fake HTTP server.
+Dub jobs are a separate minimal job type with the same polling shape as renders (`queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`), persisted in `/data/startos/voicestudio-jobs/` and run one at a time (VoiceStudio has a single serial worker). `translation_provider` is `argos` (default), `nllb` or `llm` (VoiceStudio provider `openai`, the LLM the owner configured inside VoiceStudio); VoiceStudio's own default is Google, which is never used and cloud MT names are refused. `translation_quality` is `fast` (default), `cinematic` or `autofit` (`agent` is not exposed). `dialect` (BCP-47), `translation_instructions` (max 5000), `reflect` and `auto_glossary` are forwarded to `/dub/translate` only when given. `llm` and any non-`fast` quality are refused with 403 before any upload unless `VOICESTUDIO_ALLOW_LLM_TRANSLATION=1`, because the configured LLM may be a cloud service (a local one keeps the text on the server; HyperFrames cannot tell). `voicestudio_status` reports `llm_translation_allowed`. VoiceStudio's 400 "LLM translation engine has no provider configured" becomes a 409 telling the owner to configure one; a `cinematic_skipped` field in the translate reply becomes a job `warnings` entry. `reflect` adds 2 LLM calls per segment. Errors from VoiceStudio are mapped to actionable messages (409 `asr_model_missing`, licence not accepted, `argos_pack_missing`; 503/429 are retried with `Retry-After`, then reported). The server never installs models or accepts licences. Requests use explicit long timeouts (up to 30 minutes for synthesis, hours for dubs). Tests: `server/test/voicestudio.test.ts` against a fake HTTP server.
 
 ## Skills Library
 
@@ -255,7 +257,7 @@ interfaces:
   studio: { port: 3002, type: ui, auth: basic (user studio) }
   api: { port: 3100, type: api, auth: bearer }
   mcp: { port: 3100, type: api, path: /mcp, auth: bearer, transport: streamable-http }
-actions: [set-studio-password, set-api-key, open-studio-project, configure-providers, configure-rendering]
+actions: [set-studio-password, set-api-key, open-studio-project, configure-providers, configure-rendering, configure-voicestudio]
 tasks: { set-studio-password: critical, set-api-key: important }
 state: { store: /data/store.json, studio: /data/startos/studio.json, jobs: /data/startos/jobs/ }
 projects: /data/projects/<name>  (index.html, hyperframes.json, renders/, snapshots/)
