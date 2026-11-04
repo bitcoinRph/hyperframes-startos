@@ -6,6 +6,7 @@ import { projectJson, requireProject } from './projects.js'
 import { assertAllowedCli, parseJsonOutput, runCli } from './util/cli.js'
 import { ApiError, badRequest } from './util/errors.js'
 import { resolveInside } from './util/paths.js'
+import { voicestudioConfigured } from './voicestudio.js'
 
 // Operations shared by the REST API and the MCP tools. Each one wraps a
 // hyperframes CLI command and returns the parsed `--json` payload.
@@ -269,6 +270,7 @@ export function serverInfo() {
     mcpPath: config.mcpPath,
     studioUrls: config.studioUrls,
     projectsDir: config.projectsDir,
+    voicestudio: { configured: voicestudioConfigured() },
     limits: {
       maxConcurrentRenders: config.maxConcurrentRenders,
       renderWorkers: config.renderWorkers,

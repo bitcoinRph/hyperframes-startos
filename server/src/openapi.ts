@@ -1,4 +1,5 @@
 import { renderFormats, renderQualities, renderResolutions } from './jobs.js'
+import { dubOutputs, timingStrategies, translationProviders, translationQualities } from './voicestudio.js'
 import { resolutions } from './projects.js'
 import { allowedCliCommands } from './util/cli.js'
 
@@ -63,6 +64,18 @@ export function openapi(serverUrls: string[]) {
             workers: { oneOf: [{ type: 'integer' }, { const: 'auto' }] },
             strict: { type: 'boolean' },
             gifLoop: { type: 'integer' },
+          },
+        },
+        DubJob: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            project: { type: 'string' },
+            status: { type: 'string', enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted'] },
+            stage: { type: 'string' },
+            outputs: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string' }, path: { type: 'string' }, size: { type: 'integer' } } } },
+            warnings: { type: 'array', items: { type: 'string' } },
+            error: { type: ['string', 'null'] },
           },
         },
         RenderJob: {
@@ -215,6 +228,77 @@ export function openapi(serverUrls: string[]) {
       '/api/v1/renders/{id}/download': {
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         get: { summary: 'Download the finished file', responses: { '200': { description: 'Video bytes' } } },
+      },
+      '/api/v1/voicestudio/status': { get: { summary: 'VoiceStudio: installed? reachable? models ready? (answers configured:false when VoiceStudio is absent)', responses: ok() } },
+      '/api/v1/voicestudio/voices': { get: { summary: 'VoiceStudio saved voice profiles (id, name, language, kind)', responses: ok() } },
+      '/api/v1/voicestudio/design': {
+        post: {
+          summary: 'Create a voice profile from a text description (gender, age, pitch, accent); refused when nothing maps',
+          requestBody: { required: true, content: json({ type: 'object', required: ['description', 'name'], properties: { description: { type: 'string', maxLength: 2000 }, name: { type: 'string' }, language: { type: 'string' } } }) },
+          responses: { '201': { description: 'Created', content: json({ type: 'object' }) } },
+        },
+      },
+      '/api/v1/projects/{project}/voicestudio/speak': {
+        parameters: [projectParam],
+        post: {
+          summary: 'Synthesize speech with a VoiceStudio voice and write the WAV into the project; returns path, duration, size',
+          requestBody: { required: true, content: json({ type: 'object', required: ['text', 'voice'], properties: { text: { type: 'string' }, voice: { type: 'string' }, language: { type: 'string' }, speed: { type: 'number', minimum: 0.25, maximum: 4 }, output: { type: 'string', example: 'assets/voice/intro-1.wav' }, effect_preset: { type: 'string' } } }) },
+          responses: ok(),
+        },
+      },
+      '/api/v1/projects/{project}/voicestudio/transcribe': {
+        parameters: [projectParam],
+        post: {
+          summary: 'Transcribe a project audio/video file; writes JSON (and word, SRT, VTT files) into the project; returns a short summary',
+          requestBody: { required: true, content: json({ type: 'object', required: ['input'], properties: { input: { type: 'string' }, language: { type: 'string' }, words: { type: 'boolean' }, output: { type: 'string' }, formats: { type: 'array', items: { type: 'string', enum: ['srt', 'vtt'] } } } }) },
+          responses: ok(),
+        },
+      },
+      '/api/v1/projects/{project}/voicestudio/clone': {
+        parameters: [projectParam],
+        post: {
+          summary: 'Create a cloned voice profile from a project reference recording (the owner must have the right to clone it)',
+          requestBody: { required: true, content: json({ type: 'object', required: ['reference', 'name'], properties: { reference: { type: 'string' }, name: { type: 'string' }, language: { type: 'string' }, reference_text: { type: 'string' }, consent: { type: 'string', enum: ['own_voice', 'speaker_permission'] } } }) },
+          responses: { '201': { description: 'Created', content: json({ type: 'object' }) } },
+        },
+      },
+      '/api/v1/projects/{project}/voicestudio/dub': {
+        parameters: [projectParam],
+        post: {
+          summary: 'Queue a dub (transcribe, translate, re-voice; LLM translation is owner-gated); returns a job immediately',
+          requestBody: {
+            required: true,
+            content: json({
+              type: 'object',
+              required: ['input', 'target_language'],
+              properties: {
+                input: { type: 'string' },
+                target_language: { type: 'string' },
+                translation_provider: { type: 'string', enum: [...translationProviders], default: 'argos', description: 'llm uses the LLM configured in VoiceStudio; refused (403) unless the owner enabled "Allow LLM translation"' },
+                translation_quality: { type: 'string', enum: [...translationQualities], default: 'fast', description: 'cinematic and autofit add an LLM refine pass and are owner-gated like llm' },
+                dialect: { type: 'string', description: 'BCP-47 such as es-AR; LLM paths only' },
+                translation_instructions: { type: 'string', maxLength: 5000 },
+                reflect: { type: 'boolean', description: '2 extra LLM calls per segment' },
+                auto_glossary: { type: 'boolean' },
+                voice: { type: 'string', default: 'clone-original' },
+                outputs: { type: 'array', items: { type: 'string', enum: [...dubOutputs] } },
+                source_language: { type: 'string' },
+                output_dir: { type: 'string', default: 'assets/dub' },
+                timing_strategy: { type: 'string', enum: [...timingStrategies], default: 'smart_fit' },
+              },
+            }),
+          },
+          responses: { '202': { description: 'Queued', content: json({ $ref: '#/components/schemas/DubJob' }) } },
+        },
+      },
+      '/api/v1/voicestudio/dubs': {
+        parameters: [{ name: 'project', in: 'query', schema: { type: 'string' } }],
+        get: { summary: 'Dub jobs, newest first', responses: ok({ type: 'array', items: { $ref: '#/components/schemas/DubJob' } }) },
+      },
+      '/api/v1/voicestudio/dubs/{id}': {
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        get: { summary: 'Dub job status, stage, warnings and outputs', responses: ok({ $ref: '#/components/schemas/DubJob' }) },
+        delete: { summary: 'Cancel the dub job', responses: ok({ $ref: '#/components/schemas/DubJob' }) },
       },
       '/api/v1/studio': {
         get: { summary: 'Which project Studio serves and its URLs', responses: ok() },

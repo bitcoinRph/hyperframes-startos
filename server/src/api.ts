@@ -28,6 +28,18 @@ import {
   snapshotProject,
 } from './ops.js'
 import { openapi } from './openapi.js'
+import {
+  cancelDub,
+  cloneVoice,
+  designVoice,
+  getDub,
+  listDubs,
+  listVoices,
+  speak,
+  submitDub,
+  transcribe,
+  voicestudioStatus,
+} from './voicestudio.js'
 import { createProject, deleteProject, listProjects, projectJson, summarize } from './projects.js'
 import { listSkills, readSkillFile, skillFiles } from './skills.js'
 import { openInStudio, studioStatus } from './studio.js'
@@ -234,6 +246,18 @@ export function createApp(): Hono {
       await s.pipe(Readable.toWeb(streamFile(f.abs)) as ReadableStream)
     })
   })
+
+  // ── VoiceStudio (optional dependency; every route answers 503 when it is absent) ──
+  api.get('/voicestudio/status', async (c) => c.json(await voicestudioStatus()))
+  api.get('/voicestudio/voices', async (c) => c.json(await listVoices()))
+  api.post('/voicestudio/design', async (c) => c.json(await designVoice(await body(c)), 201))
+  api.post('/projects/:project/voicestudio/speak', async (c) => c.json(await speak({ ...(await body<Record<string, never>>(c)), project: c.req.param('project') } as never)))
+  api.post('/projects/:project/voicestudio/transcribe', async (c) => c.json(await transcribe({ ...(await body<Record<string, never>>(c)), project: c.req.param('project') } as never)))
+  api.post('/projects/:project/voicestudio/clone', async (c) => c.json(await cloneVoice({ ...(await body<Record<string, never>>(c)), project: c.req.param('project') } as never), 201))
+  api.post('/projects/:project/voicestudio/dub', async (c) => c.json(await submitDub({ ...(await body<Record<string, never>>(c)), project: c.req.param('project') } as never), 202))
+  api.get('/voicestudio/dubs', (c) => c.json(listDubs(c.req.query('project') ?? undefined)))
+  api.get('/voicestudio/dubs/:id', (c) => c.json(getDub(c.req.param('id'))))
+  api.delete('/voicestudio/dubs/:id', async (c) => c.json(await cancelDub(c.req.param('id'))))
 
   api.get('/studio', async (c) => c.json(await studioStatus()))
   api.post('/studio', async (c) => {
